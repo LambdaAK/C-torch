@@ -4,17 +4,29 @@
 
 namespace math
 {
+    /**
+     * @brief AdamW optimizer with decoupled weight decay.
+     */
     class AdamW
     {
     private:
-        double learning_rate;
-        int max_iter;
-        double beta1;
-        double beta2;
-        double epsilon;
-        double weight_decay;
+        double learning_rate; ///< Base learning rate.
+        int max_iter;         ///< Maximum optimizer iterations.
+        double beta1;         ///< First-moment decay.
+        double beta2;         ///< Second-moment decay.
+        double epsilon;       ///< Numerical stability constant.
+        double weight_decay;  ///< Decoupled weight decay coefficient.
 
     public:
+        /**
+         * @brief Creates AdamW optimizer.
+         * @param learning_rate Base learning rate.
+         * @param max_iter Number of optimization iterations.
+         * @param beta1 First-moment decay.
+         * @param beta2 Second-moment decay.
+         * @param epsilon Numerical stability constant.
+         * @param weight_decay Decoupled weight decay coefficient.
+         */
         AdamW(
             double learning_rate,
             int max_iter,
@@ -29,6 +41,12 @@ namespace math
               epsilon(epsilon),
               weight_decay(weight_decay) {}
 
+        /**
+         * @brief Optimizes a single AST objective directly.
+         * @param node Objective expression.
+         * @param initial_theta Initial parameter map.
+         * @return Optimized parameter map.
+         */
         std::unordered_map<std::string, double> optimize(
             const std::shared_ptr<ASTNode> &node,
             std::unordered_map<std::string, double> initial_theta)
@@ -64,6 +82,15 @@ namespace math
             return theta;
         }
 
+        /**
+         * @brief Optimizes supervised loss using random mini-batches.
+         * @param loss_function Sample-level loss generator.
+         * @param xTr Training features.
+         * @param yTr Training labels.
+         * @param initial_theta Initial parameter map.
+         * @param batch_size Mini-batch size.
+         * @return Optimized parameter map.
+         */
         std::unordered_map<std::string, double> optimize(
             const std::shared_ptr<LossFunction> &loss_function,
             const Matrix &xTr,
@@ -104,4 +131,3 @@ namespace math
         }
     };
 } // namespace math
-

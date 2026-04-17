@@ -15,32 +15,52 @@
 namespace math
 {
 
+    /**
+     * @brief Optimizer families supported by the optimization stack.
+     */
     enum class OptimType
     {
-        GD,
-        SGD,
-        ADAGRAD,
-        RMSPROP,
-        ADAM,
-        ADAMW
+        GD,      ///< Full-batch gradient descent.
+        SGD,     ///< Stochastic gradient descent.
+        ADAGRAD, ///< AdaGrad adaptive optimizer.
+        RMSPROP, ///< RMSProp adaptive optimizer.
+        ADAM,    ///< Adam adaptive optimizer.
+        ADAMW    ///< AdamW (Adam + decoupled weight decay).
     };
 
+    /**
+     * @brief Immutable optimization configuration bundle.
+     */
     class OptimParams
     {
     private:
-        OptimType optim_type;
-        double learning_rate;
-        int max_iter;
-        Matrix xTr;
-        Matrix yTr;
-        int batch_size;
-        double beta1;
-        double beta2;
-        double epsilon;
-        double rho;
-        double weight_decay;
+        OptimType optim_type;  ///< Selected optimizer family.
+        double learning_rate;  ///< Optimizer learning rate.
+        int max_iter;          ///< Maximum iterations.
+        Matrix xTr;            ///< Optional training feature cache.
+        Matrix yTr;            ///< Optional training label cache.
+        int batch_size;        ///< Mini-batch size for stochastic optimizers.
+        double beta1;          ///< First-moment decay for Adam-like optimizers.
+        double beta2;          ///< Second-moment decay for Adam-like optimizers.
+        double epsilon;        ///< Numerical stability constant.
+        double rho;            ///< RMSProp smoothing factor.
+        double weight_decay;   ///< Decoupled weight decay coefficient.
 
     public:
+        /**
+         * @brief Constructs optimizer configuration with optional hyperparameters.
+         * @param optim_type Optimizer family.
+         * @param learning_rate Step size.
+         * @param max_iter Maximum iterations.
+         * @param xTr Optional training features.
+         * @param yTr Optional training labels.
+         * @param batch_size Mini-batch size.
+         * @param beta1 First-moment decay.
+         * @param beta2 Second-moment decay.
+         * @param epsilon Numerical stability constant.
+         * @param rho RMSProp smoothing factor.
+         * @param weight_decay Decoupled weight decay.
+         */
         OptimParams(
             OptimType optim_type = OptimType::GD,
             double learning_rate = 0.001,
@@ -65,56 +85,100 @@ namespace math
               rho(rho),
               weight_decay(weight_decay) {}
 
+        /**
+         * @brief Returns optimizer family.
+         * @return `OptimType` enum.
+         */
         OptimType get_optim_type() const
         {
             return optim_type;
         }
 
+        /**
+         * @brief Returns configured learning rate.
+         * @return Learning rate value.
+         */
         double get_learning_rate() const
         {
             return learning_rate;
         }
 
+        /**
+         * @brief Returns cached training features.
+         * @return Training feature matrix.
+         */
         Matrix get_xTr() const
         {
             return xTr;
         }
 
+        /**
+         * @brief Returns cached training labels.
+         * @return Training label matrix.
+         */
         Matrix get_yTr() const
         {
             return yTr;
         }
 
+        /**
+         * @brief Returns maximum optimizer iterations.
+         * @return Iteration count.
+         */
         int get_max_iter() const
         {
             return max_iter;
         }
 
+        /**
+         * @brief Returns configured batch size.
+         * @return Batch size.
+         */
         int get_batch_size() const
         {
             return batch_size;
         }
 
+        /**
+         * @brief Returns beta1 hyperparameter.
+         * @return First-moment decay.
+         */
         double get_beta1() const
         {
             return beta1;
         }
 
+        /**
+         * @brief Returns beta2 hyperparameter.
+         * @return Second-moment decay.
+         */
         double get_beta2() const
         {
             return beta2;
         }
 
+        /**
+         * @brief Returns epsilon hyperparameter.
+         * @return Numerical stability constant.
+         */
         double get_epsilon() const
         {
             return epsilon;
         }
 
+        /**
+         * @brief Returns rho hyperparameter.
+         * @return RMSProp smoothing factor.
+         */
         double get_rho() const
         {
             return rho;
         }
 
+        /**
+         * @brief Returns decoupled weight decay coefficient.
+         * @return Weight decay value.
+         */
         double get_weight_decay() const
         {
             return weight_decay;
@@ -123,6 +187,11 @@ namespace math
 
     namespace detail
     {
+        /**
+         * @brief Validates supervised data layout constraints.
+         * @param xTr Training features.
+         * @param yTr Training labels.
+         */
         inline void validate_supervised_data(const Matrix &xTr, const Matrix &yTr)
         {
             if (xTr.numRows() == 0 || xTr.numCols() == 0)
@@ -139,11 +208,23 @@ namespace math
             }
         }
 
+        /**
+         * @brief Normalizes batch size to a minimum of 1.
+         * @param batch_size Requested batch size.
+         * @return Clamped batch size.
+         */
         inline int normalize_batch_size(int batch_size)
         {
             return std::max(1, batch_size);
         }
 
+        /**
+         * @brief Builds full-batch loss expression from a loss function object.
+         * @param loss_function Loss implementation.
+         * @param xTr Training features.
+         * @param yTr Training labels.
+         * @return AST representing mean sample loss plus regularizer.
+         */
         inline std::shared_ptr<ASTNode> build_full_batch_loss(
             const std::shared_ptr<LossFunction> &loss_function,
             const Matrix &xTr,
@@ -167,6 +248,14 @@ namespace math
             return loss;
         }
 
+        /**
+         * @brief Builds random mini-batch loss expression.
+         * @param loss_function Loss implementation.
+         * @param xTr Training features.
+         * @param yTr Training labels.
+         * @param batch_size Requested mini-batch size.
+         * @return AST representing sampled mean loss plus regularizer.
+         */
         inline std::shared_ptr<ASTNode> build_random_batch_loss(
             const std::shared_ptr<LossFunction> &loss_function,
             const Matrix &xTr,
@@ -195,6 +284,11 @@ namespace math
         }
     } // namespace detail
 
+    /**
+     * @brief Numerical differentiator for AST-based objective functions.
+     *
+     * Uses finite-difference approximations to estimate gradients.
+     */
     class Differentiator
     {
 
@@ -209,11 +303,15 @@ namespace math
         */
 
     private:
-        double h = 1e-5;
+        double h = 1e-5; ///< Finite-difference step size.
 
     public:
         /**
-         * Differentiate the function with respect to var_name and return the derivative evaluated at the value
+         * @brief Differentiates expression with respect to one variable.
+         * @param node Expression AST.
+         * @param var_name Variable name to differentiate by.
+         * @param value Evaluation point for variable.
+         * @return Simplified AST approximating derivative value at `value`.
          */
         std::shared_ptr<ASTNode> diff_single(std::shared_ptr<ASTNode> node, std::string var_name, double value)
         {
@@ -234,8 +332,10 @@ namespace math
         }
 
         /**
-         * Differentiate with respect to each variable in values, and return the derivative evaluated the values provided
-         * [values] should map every variable in node to a value, otherwise, an error will be thrown
+         * @brief Computes gradient map with respect to all provided variables.
+         * @param node Expression AST.
+         * @param values Variable assignment map for evaluation.
+         * @return Partial derivatives keyed by variable name.
          */
         std::unordered_map<std::string, double> diff(std::shared_ptr<ASTNode> node, std::unordered_map<std::string, double> values)
         {
@@ -289,4 +389,3 @@ namespace math
     };
 
 } // namespace math
-

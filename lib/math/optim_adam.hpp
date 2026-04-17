@@ -4,19 +4,36 @@
 
 namespace math
 {
+    /**
+     * @brief Adam optimizer for AST-based objectives.
+     */
     class Adam
     {
     private:
-        double learning_rate;
-        int max_iter;
-        double beta1;
-        double beta2;
-        double epsilon;
+        double learning_rate; ///< Base learning rate.
+        int max_iter;         ///< Maximum optimizer iterations.
+        double beta1;         ///< First-moment decay.
+        double beta2;         ///< Second-moment decay.
+        double epsilon;       ///< Numerical stability constant.
 
     public:
+        /**
+         * @brief Creates Adam optimizer.
+         * @param learning_rate Base learning rate.
+         * @param max_iter Number of optimization iterations.
+         * @param beta1 First-moment decay.
+         * @param beta2 Second-moment decay.
+         * @param epsilon Numerical stability constant.
+         */
         Adam(double learning_rate, int max_iter, double beta1 = 0.9, double beta2 = 0.999, double epsilon = 1e-8)
             : learning_rate(learning_rate), max_iter(max_iter), beta1(beta1), beta2(beta2), epsilon(epsilon) {}
 
+        /**
+         * @brief Optimizes a single AST objective directly.
+         * @param node Objective expression.
+         * @param initial_theta Initial parameter map.
+         * @return Optimized parameter map.
+         */
         std::unordered_map<std::string, double> optimize(
             const std::shared_ptr<ASTNode> &node,
             std::unordered_map<std::string, double> initial_theta)
@@ -48,6 +65,15 @@ namespace math
             return theta;
         }
 
+        /**
+         * @brief Optimizes supervised loss using random mini-batches.
+         * @param loss_function Sample-level loss generator.
+         * @param xTr Training features.
+         * @param yTr Training labels.
+         * @param initial_theta Initial parameter map.
+         * @param batch_size Mini-batch size.
+         * @return Optimized parameter map.
+         */
         std::unordered_map<std::string, double> optimize(
             const std::shared_ptr<LossFunction> &loss_function,
             const Matrix &xTr,
@@ -84,4 +110,3 @@ namespace math
         }
     };
 } // namespace math
-
