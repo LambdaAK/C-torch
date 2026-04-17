@@ -1,23 +1,23 @@
 /*
   Commands to compile this file with different optimization levels:
 
-  1. g++ -std=c++20 -I../../lib ttt_main.cpp ./tictactoe.cpp ./replaymemory.cpp ./dqn.cpp ./sample.cpp ../../lib/math/matrix.cpp ../../lib/ml/nn.cpp -o ttt_main
+  1. g++ -std=c++20 -I../../lib ttt_main.cpp ./tictactoe.cpp ./replaymemory.cpp ./dqn.cpp ./sample.cpp ../../lib/math/matrix.cpp ../../lib/ml/nn.cpp ../../lib/ml/nn_optim.cpp -o ttt_main
   // no flags: no optimizations
 
-  2. g++ -std=c++20 -O1 -I../../lib ttt_main.cpp ./tictactoe.cpp ./replaymemory.cpp ./dqn.cpp ./sample.cpp ../../lib/math/matrix.cpp ../../lib/ml/nn.cpp -o ttt_main
+  2. g++ -std=c++20 -O1 -I../../lib ttt_main.cpp ./tictactoe.cpp ./replaymemory.cpp ./dqn.cpp ./sample.cpp ../../lib/math/matrix.cpp ../../lib/ml/nn.cpp ../../lib/ml/nn_optim.cpp -o ttt_main
   // -O1: basic optimizations, minimal compile time impact
 
-  3. g++ -std=c++20 -O2 -I../../lib ttt_main.cpp ./tictactoe.cpp ./replaymemory.cpp ./dqn.cpp ./sample.cpp ../../lib/math/matrix.cpp ../../lib/ml/nn.cpp -o ttt_main
+  3. g++ -std=c++20 -O2 -I../../lib ttt_main.cpp ./tictactoe.cpp ./replaymemory.cpp ./dqn.cpp ./sample.cpp ../../lib/math/matrix.cpp ../../lib/ml/nn.cpp ../../lib/ml/nn_optim.cpp -o ttt_main
   // -O2: more aggressive optimizations, no space-speed tradeoffs
 
-  4. g++ -std=c++20 -O3 -I../../lib ttt_main.cpp ./tictactoe.cpp ./replaymemory.cpp ./dqn.cpp ./sample.cpp ../../lib/math/matrix.cpp ../../lib/ml/nn.cpp -o ttt_main
+  4. g++ -std=c++20 -O3 -I../../lib ttt_main.cpp ./tictactoe.cpp ./replaymemory.cpp ./dqn.cpp ./sample.cpp ../../lib/math/matrix.cpp ../../lib/ml/nn.cpp ../../lib/ml/nn_optim.cpp -o ttt_main
   // -O3: function inlining, vectorization, loop unrolling, constant propagation
 
-  5. g++ -std=c++20 -O3 -ffast-math -I../../lib ttt_main.cpp ./tictactoe.cpp ./replaymemory.cpp ./dqn.cpp ./sample.cpp ../../lib/math/matrix.cpp ../../lib/ml/nn.cpp -o ttt_main_fastmath
+  5. g++ -std=c++20 -O3 -ffast-math -I../../lib ttt_main.cpp ./tictactoe.cpp ./replaymemory.cpp ./dqn.cpp ./sample.cpp ../../lib/math/matrix.cpp ../../lib/ml/nn.cpp ../../lib/ml/nn_optim.cpp -o ttt_main_fastmath
   // -O3: all O3 optimizations
   // -ffast-math: floating point math optimizations, relaxed IEEE compliance
 
-  6. g++ -std=c++20 -O3 -ffast-math -funroll-loops -flto -march=native -mtune=native -fomit-frame-pointer -I../../lib ttt_main.cpp ./tictactoe.cpp ./replaymemory.cpp ./dqn.cpp ./sample.cpp ../../lib/math/matrix.cpp ../../lib/ml/nn.cpp -o ttt_main
+  6. g++ -std=c++20 -O3 -ffast-math -funroll-loops -flto -march=native -mtune=native -fomit-frame-pointer -I../../lib ttt_main.cpp ./tictactoe.cpp ./replaymemory.cpp ./dqn.cpp ./sample.cpp ../../lib/math/matrix.cpp ../../lib/ml/nn.cpp ../../lib/ml/nn_optim.cpp -o ttt_main
   // -O3: all O3 optimizations
   // -ffast-math: floating point math optimizations, relaxed IEEE compliance
   // -funroll-loops: unroll loops

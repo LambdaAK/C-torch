@@ -18,6 +18,7 @@ set(CTORCH_SOURCES
     lib/ml/logisticregression.cpp
     lib/ml/knn.cpp
     lib/ml/nn.cpp
+    lib/ml/nn_optim.cpp
     lib/ml/randomfouriersvm.cpp
     lib/ml/kernelsvm.cpp
     lib/ml/kmeans.cpp
