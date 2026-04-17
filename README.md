@@ -147,12 +147,17 @@ cmake --build build --target recommender
 
 If configure fails, read the message: missing `CURL`, `Python3`, or `numpy` is the usual cause.
 
-### Optional: Python bindings pilot (Matrix + KNN)
+### Optional: Python bindings (ctypes)
 
-This repository includes a minimal Python binding slice for:
+This repository includes Python bindings for:
 
 - `Matrix` (`shape`, element access, `+`, `-`, scalar `*`, matrix `@`, transpose)
-- `KNN` (`predict`, `score`, `k` getter/setter)
+- Supervised models:
+  `KNN`, `LinearRegression`, `LogisticRegression`, `Perceptron`, `SVM`, `KernelSVM`, `RandomFourierSVM`, `GaussianNB`
+- Unsupervised / bandits:
+  `KMeans`, `PCA`, `MAB`, `UCB`
+- Enum helpers:
+  `OptimType`, `DataAugmentationType`, `KernelType`
 
 Build the binding library:
 
@@ -165,16 +170,41 @@ Run from the repo root:
 
 ```bash
 PYTHONPATH="$PWD/python" python3 - <<'PY'
-from ctorch import Matrix, KNN
+from ctorch import (
+    Matrix,
+    KNN,
+    SVM,
+    GaussianNB,
+    KMeans,
+    PCA,
+    UCB,
+    DataAugmentationType,
+)
 
 a = Matrix(data=[[1.0, 2.0], [3.0, 4.0]])
 b = Matrix(data=[[5.0, 6.0], [7.0, 8.0]])
 print((a + b).to_list())
 
 x_tr = Matrix(data=[[0.0, 0.0], [10.0, 10.0], [1.0, 1.0]])
-y_tr = Matrix(data=[[0.0, 1.0, 2.0]])
+y_tr = Matrix(data=[[0.0, 1.0, 1.0]])
 knn = KNN(1, x_tr, y_tr)
 print(knn.predict([[0.1, 0.1]]))
+
+svm = SVM(x_tr, [[-1.0, 1.0, 1.0]], learning_rate=0.0, max_iter=100, c_value=1.0, augmentation=DataAugmentationType.NO_OP)
+print(svm.predict([[0.1, 0.1]]))
+
+gnb = GaussianNB(x_tr, y_tr)
+print(gnb.predict([[0.1, 0.1]]))
+
+kmeans = KMeans(2, x_tr, max_iter=20)
+print(kmeans.assignments)
+
+pca = PCA([[-0.5, -0.5], [0.5, 0.5], [0.6, 0.4], [-0.6, -0.4]])
+print(pca.compute_projection(1).shape)
+
+ucb = UCB(3)
+arm = ucb.select_arm()
+ucb.update(arm, 1.0)
 PY
 ```
 

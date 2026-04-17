@@ -37,7 +37,7 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
     target_compile_options(ctorch PRIVATE -Wall -Wextra)
 endif()
 
-option(CTORCH_BUILD_PYTHON_BINDINGS "Build Python ctypes bindings (Matrix + KNN pilot)" OFF)
+option(CTORCH_BUILD_PYTHON_BINDINGS "Build Python ctypes bindings (Matrix + classical ML models)" OFF)
 if(CTORCH_BUILD_PYTHON_BINDINGS)
     add_library(ctorch_c SHARED
         lib/bindings/ctorch_c_api.cpp

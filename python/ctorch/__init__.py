@@ -2,10 +2,53 @@ from __future__ import annotations
 
 import ctypes as ct
 import os
+from enum import IntEnum
 from pathlib import Path
 from typing import Sequence
 
-__all__ = ["Matrix", "KNN"]
+__all__ = [
+    "Matrix",
+    "KNN",
+    "LinearRegression",
+    "LogisticRegression",
+    "Perceptron",
+    "SVM",
+    "KernelSVM",
+    "RandomFourierSVM",
+    "GaussianNB",
+    "KMeans",
+    "PCA",
+    "MAB",
+    "UCB",
+    "OptimType",
+    "DataAugmentationType",
+    "KernelType",
+]
+
+
+class OptimType(IntEnum):
+    GD = 0
+    SGD = 1
+    ADAGRAD = 2
+    RMSPROP = 3
+    ADAM = 4
+    ADAMW = 5
+
+
+class DataAugmentationType(IntEnum):
+    NO_OP = 0
+    POLY_2 = 1
+    POLY_3 = 2
+    POLY_4 = 3
+    POLY_5 = 4
+    RFF = 5
+
+
+class KernelType(IntEnum):
+    LINEAR = 0
+    POLYNOMIAL_2 = 1
+    POLYNOMIAL_3 = 2
+    RADIAL_BASIS = 3
 
 
 def _candidate_library_paths() -> list[Path]:
@@ -110,6 +153,223 @@ _lib.ctorch_knn_get_k.restype = ct.c_bool
 _lib.ctorch_knn_set_k.argtypes = [ct.c_void_p, ct.c_size_t]
 _lib.ctorch_knn_set_k.restype = ct.c_bool
 
+_lib.ctorch_linear_regression_create.argtypes = [
+    ct.c_void_p,
+    ct.c_void_p,
+    ct.c_double,
+    ct.c_int,
+]
+_lib.ctorch_linear_regression_create.restype = ct.c_void_p
+_lib.ctorch_linear_regression_destroy.argtypes = [ct.c_void_p]
+_lib.ctorch_linear_regression_destroy.restype = None
+_lib.ctorch_linear_regression_predict.argtypes = [
+    ct.c_void_p,
+    ct.c_void_p,
+    ct.POINTER(ct.c_double),
+]
+_lib.ctorch_linear_regression_predict.restype = ct.c_bool
+_lib.ctorch_linear_regression_score.argtypes = [
+    ct.c_void_p,
+    ct.c_void_p,
+    ct.c_void_p,
+    ct.c_double,
+    ct.POINTER(ct.c_double),
+]
+_lib.ctorch_linear_regression_score.restype = ct.c_bool
+
+_lib.ctorch_logistic_regression_create.argtypes = [
+    ct.c_void_p,
+    ct.c_void_p,
+    ct.c_int,
+    ct.c_double,
+    ct.c_int,
+    ct.c_int,
+    ct.c_double,
+    ct.c_double,
+    ct.c_double,
+    ct.c_double,
+    ct.c_double,
+    ct.c_int,
+]
+_lib.ctorch_logistic_regression_create.restype = ct.c_void_p
+_lib.ctorch_logistic_regression_destroy.argtypes = [ct.c_void_p]
+_lib.ctorch_logistic_regression_destroy.restype = None
+_lib.ctorch_logistic_regression_predict.argtypes = [
+    ct.c_void_p,
+    ct.c_void_p,
+    ct.POINTER(ct.c_int),
+]
+_lib.ctorch_logistic_regression_predict.restype = ct.c_bool
+_lib.ctorch_logistic_regression_score.argtypes = [
+    ct.c_void_p,
+    ct.c_void_p,
+    ct.c_void_p,
+    ct.POINTER(ct.c_double),
+]
+_lib.ctorch_logistic_regression_score.restype = ct.c_bool
+
+_lib.ctorch_perceptron_create.argtypes = [
+    ct.c_void_p,
+    ct.c_void_p,
+    ct.c_int,
+]
+_lib.ctorch_perceptron_create.restype = ct.c_void_p
+_lib.ctorch_perceptron_destroy.argtypes = [ct.c_void_p]
+_lib.ctorch_perceptron_destroy.restype = None
+_lib.ctorch_perceptron_predict.argtypes = [
+    ct.c_void_p,
+    ct.c_void_p,
+    ct.POINTER(ct.c_int),
+]
+_lib.ctorch_perceptron_predict.restype = ct.c_bool
+_lib.ctorch_perceptron_score.argtypes = [
+    ct.c_void_p,
+    ct.c_void_p,
+    ct.c_void_p,
+    ct.POINTER(ct.c_double),
+]
+_lib.ctorch_perceptron_score.restype = ct.c_bool
+
+_lib.ctorch_svm_create.argtypes = [
+    ct.c_void_p,
+    ct.c_void_p,
+    ct.c_double,
+    ct.c_int,
+    ct.c_double,
+    ct.c_int,
+]
+_lib.ctorch_svm_create.restype = ct.c_void_p
+_lib.ctorch_svm_destroy.argtypes = [ct.c_void_p]
+_lib.ctorch_svm_destroy.restype = None
+_lib.ctorch_svm_predict.argtypes = [
+    ct.c_void_p,
+    ct.c_void_p,
+    ct.POINTER(ct.c_int),
+]
+_lib.ctorch_svm_predict.restype = ct.c_bool
+_lib.ctorch_svm_score.argtypes = [
+    ct.c_void_p,
+    ct.c_void_p,
+    ct.c_void_p,
+    ct.POINTER(ct.c_double),
+]
+_lib.ctorch_svm_score.restype = ct.c_bool
+
+_lib.ctorch_kernel_svm_create.argtypes = [
+    ct.c_void_p,
+    ct.c_void_p,
+    ct.c_double,
+    ct.c_int,
+    ct.c_double,
+    ct.c_int,
+    ct.c_double,
+]
+_lib.ctorch_kernel_svm_create.restype = ct.c_void_p
+_lib.ctorch_kernel_svm_destroy.argtypes = [ct.c_void_p]
+_lib.ctorch_kernel_svm_destroy.restype = None
+_lib.ctorch_kernel_svm_predict.argtypes = [
+    ct.c_void_p,
+    ct.c_void_p,
+    ct.POINTER(ct.c_int),
+]
+_lib.ctorch_kernel_svm_predict.restype = ct.c_bool
+_lib.ctorch_kernel_svm_score.argtypes = [
+    ct.c_void_p,
+    ct.c_void_p,
+    ct.c_void_p,
+    ct.POINTER(ct.c_double),
+]
+_lib.ctorch_kernel_svm_score.restype = ct.c_bool
+
+_lib.ctorch_random_fourier_svm_create.argtypes = [
+    ct.c_void_p,
+    ct.c_void_p,
+    ct.c_int,
+    ct.c_double,
+    ct.c_double,
+    ct.c_int,
+    ct.c_double,
+]
+_lib.ctorch_random_fourier_svm_create.restype = ct.c_void_p
+_lib.ctorch_random_fourier_svm_destroy.argtypes = [ct.c_void_p]
+_lib.ctorch_random_fourier_svm_destroy.restype = None
+_lib.ctorch_random_fourier_svm_predict.argtypes = [
+    ct.c_void_p,
+    ct.c_void_p,
+    ct.POINTER(ct.c_int),
+]
+_lib.ctorch_random_fourier_svm_predict.restype = ct.c_bool
+_lib.ctorch_random_fourier_svm_score.argtypes = [
+    ct.c_void_p,
+    ct.c_void_p,
+    ct.c_void_p,
+    ct.POINTER(ct.c_double),
+]
+_lib.ctorch_random_fourier_svm_score.restype = ct.c_bool
+
+_lib.ctorch_gaussian_nb_create.argtypes = [ct.c_void_p, ct.c_void_p]
+_lib.ctorch_gaussian_nb_create.restype = ct.c_void_p
+_lib.ctorch_gaussian_nb_destroy.argtypes = [ct.c_void_p]
+_lib.ctorch_gaussian_nb_destroy.restype = None
+_lib.ctorch_gaussian_nb_predict.argtypes = [
+    ct.c_void_p,
+    ct.c_void_p,
+    ct.POINTER(ct.c_int),
+]
+_lib.ctorch_gaussian_nb_predict.restype = ct.c_bool
+_lib.ctorch_gaussian_nb_score.argtypes = [
+    ct.c_void_p,
+    ct.c_void_p,
+    ct.c_void_p,
+    ct.POINTER(ct.c_double),
+]
+_lib.ctorch_gaussian_nb_score.restype = ct.c_bool
+
+_lib.ctorch_kmeans_create.argtypes = [ct.c_int, ct.c_void_p, ct.c_int]
+_lib.ctorch_kmeans_create.restype = ct.c_void_p
+_lib.ctorch_kmeans_destroy.argtypes = [ct.c_void_p]
+_lib.ctorch_kmeans_destroy.restype = None
+_lib.ctorch_kmeans_assignment_count.argtypes = [ct.c_void_p, ct.POINTER(ct.c_size_t)]
+_lib.ctorch_kmeans_assignment_count.restype = ct.c_bool
+_lib.ctorch_kmeans_get_assignments.argtypes = [
+    ct.c_void_p,
+    ct.POINTER(ct.c_int),
+    ct.c_size_t,
+]
+_lib.ctorch_kmeans_get_assignments.restype = ct.c_bool
+
+_lib.ctorch_pca_create.argtypes = [ct.c_void_p]
+_lib.ctorch_pca_create.restype = ct.c_void_p
+_lib.ctorch_pca_destroy.argtypes = [ct.c_void_p]
+_lib.ctorch_pca_destroy.restype = None
+_lib.ctorch_pca_compute_projection.argtypes = [
+    ct.c_void_p,
+    ct.c_int,
+    ct.c_int,
+    ct.c_double,
+]
+_lib.ctorch_pca_compute_projection.restype = ct.c_void_p
+
+_lib.ctorch_mab_create.argtypes = [ct.c_int, ct.c_float]
+_lib.ctorch_mab_create.restype = ct.c_void_p
+_lib.ctorch_mab_destroy.argtypes = [ct.c_void_p]
+_lib.ctorch_mab_destroy.restype = None
+_lib.ctorch_mab_select_arm.argtypes = [ct.c_void_p, ct.POINTER(ct.c_int)]
+_lib.ctorch_mab_select_arm.restype = ct.c_bool
+_lib.ctorch_mab_update.argtypes = [ct.c_void_p, ct.c_int, ct.c_double]
+_lib.ctorch_mab_update.restype = ct.c_bool
+_lib.ctorch_mab_set_epsilon.argtypes = [ct.c_void_p, ct.c_float]
+_lib.ctorch_mab_set_epsilon.restype = ct.c_bool
+
+_lib.ctorch_ucb_create.argtypes = [ct.c_int]
+_lib.ctorch_ucb_create.restype = ct.c_void_p
+_lib.ctorch_ucb_destroy.argtypes = [ct.c_void_p]
+_lib.ctorch_ucb_destroy.restype = None
+_lib.ctorch_ucb_select_arm.argtypes = [ct.c_void_p, ct.POINTER(ct.c_int)]
+_lib.ctorch_ucb_select_arm.restype = ct.c_bool
+_lib.ctorch_ucb_update.argtypes = [ct.c_void_p, ct.c_int, ct.c_double]
+_lib.ctorch_ucb_update.restype = ct.c_bool
+
 
 def _last_error() -> str:
     raw = _lib.ctorch_last_error()
@@ -125,6 +385,15 @@ def _raise_last_error(prefix: str) -> RuntimeError:
 
 def _is_number(value: object) -> bool:
     return isinstance(value, (int, float))
+
+
+def _coerce_enum(value: int | IntEnum, enum_type: type[IntEnum], field_name: str) -> IntEnum:
+    if isinstance(value, enum_type):
+        return value
+    try:
+        return enum_type(int(value))
+    except Exception as exc:  # pragma: no cover - defensive typing gate
+        raise ValueError(f"invalid {field_name}: {value}") from exc
 
 
 def _coerce_2d(data: Sequence[object]) -> tuple[int, int, list[float]]:
@@ -189,7 +458,6 @@ class Matrix:
             self._ptr = ct.c_void_p(_ptr)
             return
 
-        # Allow Matrix(x) where x is a 1D/2D array-like payload.
         if data is None and cols is None and rows is not None and not _is_number(rows):
             data = rows
             rows = None
@@ -389,4 +657,524 @@ class KNN:
         ptr = getattr(self, "_ptr", None)
         if ptr:
             _lib.ctorch_knn_destroy(ptr)
+            self._ptr = ct.c_void_p()
+
+
+class LinearRegression:
+    __slots__ = ("_ptr",)
+
+    def __init__(
+        self,
+        x_train: Matrix | Sequence[object],
+        y_train: Matrix | Sequence[object],
+        learning_rate: float,
+        max_iter: int,
+    ) -> None:
+        x_mat = _coerce_matrix(x_train)
+        y_mat = _coerce_row_vector(y_train)
+        ptr = _lib.ctorch_linear_regression_create(
+            x_mat._ptr,
+            y_mat._ptr,
+            float(learning_rate),
+            int(max_iter),
+        )
+        if not ptr:
+            raise _raise_last_error("LinearRegression(...) failed")
+        self._ptr = ct.c_void_p(ptr)
+
+    def predict(self, sample: Matrix | Sequence[object]) -> float:
+        sample_mat = _coerce_row_vector(sample)
+        out = ct.c_double()
+        ok = _lib.ctorch_linear_regression_predict(self._ptr, sample_mat._ptr, ct.byref(out))
+        if not ok:
+            raise _raise_last_error("LinearRegression.predict failed")
+        return float(out.value)
+
+    def score(
+        self,
+        x_test: Matrix | Sequence[object],
+        y_test: Matrix | Sequence[object],
+        threshold: float = 0.5,
+    ) -> float:
+        x_mat = _coerce_matrix(x_test)
+        y_mat = _coerce_row_vector(y_test)
+        out = ct.c_double()
+        ok = _lib.ctorch_linear_regression_score(
+            self._ptr,
+            x_mat._ptr,
+            y_mat._ptr,
+            float(threshold),
+            ct.byref(out),
+        )
+        if not ok:
+            raise _raise_last_error("LinearRegression.score failed")
+        return float(out.value)
+
+    def __del__(self) -> None:
+        ptr = getattr(self, "_ptr", None)
+        if ptr:
+            _lib.ctorch_linear_regression_destroy(ptr)
+            self._ptr = ct.c_void_p()
+
+
+class LogisticRegression:
+    __slots__ = ("_ptr",)
+
+    def __init__(
+        self,
+        x_train: Matrix | Sequence[object],
+        y_train: Matrix | Sequence[object],
+        optim_type: OptimType | int = OptimType.GD,
+        learning_rate: float = 0.001,
+        max_iter: int = 1000,
+        batch_size: int = 1,
+        beta1: float = 0.9,
+        beta2: float = 0.999,
+        epsilon: float = 1e-8,
+        rho: float = 0.99,
+        weight_decay: float = 0.0,
+        augmentation: DataAugmentationType | int = DataAugmentationType.NO_OP,
+    ) -> None:
+        x_mat = _coerce_matrix(x_train)
+        y_mat = _coerce_row_vector(y_train)
+        optim = _coerce_enum(optim_type, OptimType, "optim_type")
+        augment = _coerce_enum(augmentation, DataAugmentationType, "augmentation")
+
+        ptr = _lib.ctorch_logistic_regression_create(
+            x_mat._ptr,
+            y_mat._ptr,
+            int(optim),
+            float(learning_rate),
+            int(max_iter),
+            int(batch_size),
+            float(beta1),
+            float(beta2),
+            float(epsilon),
+            float(rho),
+            float(weight_decay),
+            int(augment),
+        )
+        if not ptr:
+            raise _raise_last_error("LogisticRegression(...) failed")
+        self._ptr = ct.c_void_p(ptr)
+
+    def predict(self, sample: Matrix | Sequence[object]) -> int:
+        sample_mat = _coerce_row_vector(sample)
+        out = ct.c_int()
+        ok = _lib.ctorch_logistic_regression_predict(self._ptr, sample_mat._ptr, ct.byref(out))
+        if not ok:
+            raise _raise_last_error("LogisticRegression.predict failed")
+        return int(out.value)
+
+    def score(
+        self,
+        x_test: Matrix | Sequence[object],
+        y_test: Matrix | Sequence[object],
+    ) -> float:
+        x_mat = _coerce_matrix(x_test)
+        y_mat = _coerce_row_vector(y_test)
+        out = ct.c_double()
+        ok = _lib.ctorch_logistic_regression_score(
+            self._ptr,
+            x_mat._ptr,
+            y_mat._ptr,
+            ct.byref(out),
+        )
+        if not ok:
+            raise _raise_last_error("LogisticRegression.score failed")
+        return float(out.value)
+
+    def __del__(self) -> None:
+        ptr = getattr(self, "_ptr", None)
+        if ptr:
+            _lib.ctorch_logistic_regression_destroy(ptr)
+            self._ptr = ct.c_void_p()
+
+
+class Perceptron:
+    __slots__ = ("_ptr",)
+
+    def __init__(
+        self,
+        x_train: Matrix | Sequence[object],
+        y_train: Matrix | Sequence[object],
+        epochs: int = 300,
+    ) -> None:
+        x_mat = _coerce_matrix(x_train)
+        y_mat = _coerce_row_vector(y_train)
+        ptr = _lib.ctorch_perceptron_create(x_mat._ptr, y_mat._ptr, int(epochs))
+        if not ptr:
+            raise _raise_last_error("Perceptron(...) failed")
+        self._ptr = ct.c_void_p(ptr)
+
+    def predict(self, sample: Matrix | Sequence[object]) -> int:
+        sample_mat = _coerce_row_vector(sample)
+        out = ct.c_int()
+        ok = _lib.ctorch_perceptron_predict(self._ptr, sample_mat._ptr, ct.byref(out))
+        if not ok:
+            raise _raise_last_error("Perceptron.predict failed")
+        return int(out.value)
+
+    def score(
+        self,
+        x_test: Matrix | Sequence[object],
+        y_test: Matrix | Sequence[object],
+    ) -> float:
+        x_mat = _coerce_matrix(x_test)
+        y_mat = _coerce_row_vector(y_test)
+        out = ct.c_double()
+        ok = _lib.ctorch_perceptron_score(self._ptr, x_mat._ptr, y_mat._ptr, ct.byref(out))
+        if not ok:
+            raise _raise_last_error("Perceptron.score failed")
+        return float(out.value)
+
+    def __del__(self) -> None:
+        ptr = getattr(self, "_ptr", None)
+        if ptr:
+            _lib.ctorch_perceptron_destroy(ptr)
+            self._ptr = ct.c_void_p()
+
+
+class SVM:
+    __slots__ = ("_ptr",)
+
+    def __init__(
+        self,
+        x_train: Matrix | Sequence[object],
+        y_train: Matrix | Sequence[object],
+        learning_rate: float,
+        max_iter: int,
+        c_value: float,
+        augmentation: DataAugmentationType | int = DataAugmentationType.NO_OP,
+    ) -> None:
+        x_mat = _coerce_matrix(x_train)
+        y_mat = _coerce_row_vector(y_train)
+        augment = _coerce_enum(augmentation, DataAugmentationType, "augmentation")
+        ptr = _lib.ctorch_svm_create(
+            x_mat._ptr,
+            y_mat._ptr,
+            float(learning_rate),
+            int(max_iter),
+            float(c_value),
+            int(augment),
+        )
+        if not ptr:
+            raise _raise_last_error("SVM(...) failed")
+        self._ptr = ct.c_void_p(ptr)
+
+    def predict(self, sample: Matrix | Sequence[object]) -> int:
+        sample_mat = _coerce_row_vector(sample)
+        out = ct.c_int()
+        ok = _lib.ctorch_svm_predict(self._ptr, sample_mat._ptr, ct.byref(out))
+        if not ok:
+            raise _raise_last_error("SVM.predict failed")
+        return int(out.value)
+
+    def score(
+        self,
+        x_test: Matrix | Sequence[object],
+        y_test: Matrix | Sequence[object],
+    ) -> float:
+        x_mat = _coerce_matrix(x_test)
+        y_mat = _coerce_row_vector(y_test)
+        out = ct.c_double()
+        ok = _lib.ctorch_svm_score(self._ptr, x_mat._ptr, y_mat._ptr, ct.byref(out))
+        if not ok:
+            raise _raise_last_error("SVM.score failed")
+        return float(out.value)
+
+    def __del__(self) -> None:
+        ptr = getattr(self, "_ptr", None)
+        if ptr:
+            _lib.ctorch_svm_destroy(ptr)
+            self._ptr = ct.c_void_p()
+
+
+class KernelSVM:
+    __slots__ = ("_ptr",)
+
+    def __init__(
+        self,
+        x_train: Matrix | Sequence[object],
+        y_train: Matrix | Sequence[object],
+        learning_rate: float,
+        max_iter: int,
+        c_value: float,
+        kernel: KernelType | int = KernelType.LINEAR,
+        gamma: float = 1.0,
+    ) -> None:
+        x_mat = _coerce_matrix(x_train)
+        y_mat = _coerce_row_vector(y_train)
+        kernel_type = _coerce_enum(kernel, KernelType, "kernel")
+        ptr = _lib.ctorch_kernel_svm_create(
+            x_mat._ptr,
+            y_mat._ptr,
+            float(learning_rate),
+            int(max_iter),
+            float(c_value),
+            int(kernel_type),
+            float(gamma),
+        )
+        if not ptr:
+            raise _raise_last_error("KernelSVM(...) failed")
+        self._ptr = ct.c_void_p(ptr)
+
+    def predict(self, sample: Matrix | Sequence[object]) -> int:
+        sample_mat = _coerce_row_vector(sample)
+        out = ct.c_int()
+        ok = _lib.ctorch_kernel_svm_predict(self._ptr, sample_mat._ptr, ct.byref(out))
+        if not ok:
+            raise _raise_last_error("KernelSVM.predict failed")
+        return int(out.value)
+
+    def score(
+        self,
+        x_test: Matrix | Sequence[object],
+        y_test: Matrix | Sequence[object],
+    ) -> float:
+        x_mat = _coerce_matrix(x_test)
+        y_mat = _coerce_row_vector(y_test)
+        out = ct.c_double()
+        ok = _lib.ctorch_kernel_svm_score(self._ptr, x_mat._ptr, y_mat._ptr, ct.byref(out))
+        if not ok:
+            raise _raise_last_error("KernelSVM.score failed")
+        return float(out.value)
+
+    def __del__(self) -> None:
+        ptr = getattr(self, "_ptr", None)
+        if ptr:
+            _lib.ctorch_kernel_svm_destroy(ptr)
+            self._ptr = ct.c_void_p()
+
+
+class RandomFourierSVM:
+    __slots__ = ("_ptr",)
+
+    def __init__(
+        self,
+        x_train: Matrix | Sequence[object],
+        y_train: Matrix | Sequence[object],
+        d_features: int,
+        gamma: float,
+        learning_rate: float,
+        max_iter: int,
+        c_value: float,
+    ) -> None:
+        x_mat = _coerce_matrix(x_train)
+        y_mat = _coerce_row_vector(y_train)
+        ptr = _lib.ctorch_random_fourier_svm_create(
+            x_mat._ptr,
+            y_mat._ptr,
+            int(d_features),
+            float(gamma),
+            float(learning_rate),
+            int(max_iter),
+            float(c_value),
+        )
+        if not ptr:
+            raise _raise_last_error("RandomFourierSVM(...) failed")
+        self._ptr = ct.c_void_p(ptr)
+
+    def predict(self, sample: Matrix | Sequence[object]) -> int:
+        sample_mat = _coerce_row_vector(sample)
+        out = ct.c_int()
+        ok = _lib.ctorch_random_fourier_svm_predict(self._ptr, sample_mat._ptr, ct.byref(out))
+        if not ok:
+            raise _raise_last_error("RandomFourierSVM.predict failed")
+        return int(out.value)
+
+    def score(
+        self,
+        x_test: Matrix | Sequence[object],
+        y_test: Matrix | Sequence[object],
+    ) -> float:
+        x_mat = _coerce_matrix(x_test)
+        y_mat = _coerce_row_vector(y_test)
+        out = ct.c_double()
+        ok = _lib.ctorch_random_fourier_svm_score(self._ptr, x_mat._ptr, y_mat._ptr, ct.byref(out))
+        if not ok:
+            raise _raise_last_error("RandomFourierSVM.score failed")
+        return float(out.value)
+
+    def __del__(self) -> None:
+        ptr = getattr(self, "_ptr", None)
+        if ptr:
+            _lib.ctorch_random_fourier_svm_destroy(ptr)
+            self._ptr = ct.c_void_p()
+
+
+class GaussianNB:
+    __slots__ = ("_ptr",)
+
+    def __init__(
+        self,
+        x_train: Matrix | Sequence[object],
+        y_train: Matrix | Sequence[object],
+    ) -> None:
+        x_mat = _coerce_matrix(x_train)
+        y_mat = _coerce_row_vector(y_train)
+        ptr = _lib.ctorch_gaussian_nb_create(x_mat._ptr, y_mat._ptr)
+        if not ptr:
+            raise _raise_last_error("GaussianNB(...) failed")
+        self._ptr = ct.c_void_p(ptr)
+
+    def predict(self, sample: Matrix | Sequence[object]) -> int:
+        sample_mat = _coerce_row_vector(sample)
+        out = ct.c_int()
+        ok = _lib.ctorch_gaussian_nb_predict(self._ptr, sample_mat._ptr, ct.byref(out))
+        if not ok:
+            raise _raise_last_error("GaussianNB.predict failed")
+        return int(out.value)
+
+    def score(
+        self,
+        x_test: Matrix | Sequence[object],
+        y_test: Matrix | Sequence[object],
+    ) -> float:
+        x_mat = _coerce_matrix(x_test)
+        y_mat = _coerce_row_vector(y_test)
+        out = ct.c_double()
+        ok = _lib.ctorch_gaussian_nb_score(self._ptr, x_mat._ptr, y_mat._ptr, ct.byref(out))
+        if not ok:
+            raise _raise_last_error("GaussianNB.score failed")
+        return float(out.value)
+
+    def __del__(self) -> None:
+        ptr = getattr(self, "_ptr", None)
+        if ptr:
+            _lib.ctorch_gaussian_nb_destroy(ptr)
+            self._ptr = ct.c_void_p()
+
+
+class KMeans:
+    __slots__ = ("_ptr",)
+
+    def __init__(self, k: int, x_train: Matrix | Sequence[object], max_iter: int = 100) -> None:
+        x_mat = _coerce_matrix(x_train)
+        ptr = _lib.ctorch_kmeans_create(int(k), x_mat._ptr, int(max_iter))
+        if not ptr:
+            raise _raise_last_error("KMeans(...) failed")
+        self._ptr = ct.c_void_p(ptr)
+
+    def get_assignments(self) -> list[int]:
+        count = ct.c_size_t()
+        ok = _lib.ctorch_kmeans_assignment_count(self._ptr, ct.byref(count))
+        if not ok:
+            raise _raise_last_error("KMeans.get_assignments failed")
+
+        n = int(count.value)
+        if n == 0:
+            ok = _lib.ctorch_kmeans_get_assignments(self._ptr, None, 0)
+            if not ok:
+                raise _raise_last_error("KMeans.get_assignments failed")
+            return []
+
+        out = (ct.c_int * n)()
+        ok = _lib.ctorch_kmeans_get_assignments(self._ptr, out, n)
+        if not ok:
+            raise _raise_last_error("KMeans.get_assignments failed")
+        return [int(v) for v in out]
+
+    @property
+    def assignments(self) -> list[int]:
+        return self.get_assignments()
+
+    def __del__(self) -> None:
+        ptr = getattr(self, "_ptr", None)
+        if ptr:
+            _lib.ctorch_kmeans_destroy(ptr)
+            self._ptr = ct.c_void_p()
+
+
+class PCA:
+    __slots__ = ("_ptr",)
+
+    def __init__(self, centered_x: Matrix | Sequence[object]) -> None:
+        x_mat = _coerce_matrix(centered_x)
+        ptr = _lib.ctorch_pca_create(x_mat._ptr)
+        if not ptr:
+            raise _raise_last_error("PCA(...) failed")
+        self._ptr = ct.c_void_p(ptr)
+
+    def compute_projection(
+        self,
+        k: int,
+        max_iter: int = 1000,
+        tol: float = 1e-9,
+    ) -> Matrix:
+        ptr = _lib.ctorch_pca_compute_projection(
+            self._ptr,
+            int(k),
+            int(max_iter),
+            float(tol),
+        )
+        if not ptr:
+            raise _raise_last_error("PCA.compute_projection failed")
+        return Matrix(_ptr=ptr)
+
+    def __del__(self) -> None:
+        ptr = getattr(self, "_ptr", None)
+        if ptr:
+            _lib.ctorch_pca_destroy(ptr)
+            self._ptr = ct.c_void_p()
+
+
+class MAB:
+    __slots__ = ("_ptr",)
+
+    def __init__(self, n_arms: int, eps: float) -> None:
+        ptr = _lib.ctorch_mab_create(int(n_arms), float(eps))
+        if not ptr:
+            raise _raise_last_error("MAB(...) failed")
+        self._ptr = ct.c_void_p(ptr)
+
+    def select_arm(self) -> int:
+        out = ct.c_int()
+        ok = _lib.ctorch_mab_select_arm(self._ptr, ct.byref(out))
+        if not ok:
+            raise _raise_last_error("MAB.select_arm failed")
+        return int(out.value)
+
+    def update(self, arm: int, reward: float) -> None:
+        ok = _lib.ctorch_mab_update(self._ptr, int(arm), float(reward))
+        if not ok:
+            raise _raise_last_error("MAB.update failed")
+
+    def set_epsilon(self, eps: float) -> None:
+        ok = _lib.ctorch_mab_set_epsilon(self._ptr, float(eps))
+        if not ok:
+            raise _raise_last_error("MAB.set_epsilon failed")
+
+    def __del__(self) -> None:
+        ptr = getattr(self, "_ptr", None)
+        if ptr:
+            _lib.ctorch_mab_destroy(ptr)
+            self._ptr = ct.c_void_p()
+
+
+class UCB:
+    __slots__ = ("_ptr",)
+
+    def __init__(self, n_arms: int) -> None:
+        ptr = _lib.ctorch_ucb_create(int(n_arms))
+        if not ptr:
+            raise _raise_last_error("UCB(...) failed")
+        self._ptr = ct.c_void_p(ptr)
+
+    def select_arm(self) -> int:
+        out = ct.c_int()
+        ok = _lib.ctorch_ucb_select_arm(self._ptr, ct.byref(out))
+        if not ok:
+            raise _raise_last_error("UCB.select_arm failed")
+        return int(out.value)
+
+    def update(self, arm: int, reward: float) -> None:
+        ok = _lib.ctorch_ucb_update(self._ptr, int(arm), float(reward))
+        if not ok:
+            raise _raise_last_error("UCB.update failed")
+
+    def __del__(self) -> None:
+        ptr = getattr(self, "_ptr", None)
+        if ptr:
+            _lib.ctorch_ucb_destroy(ptr)
             self._ptr = ct.c_void_p()
