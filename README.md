@@ -24,22 +24,22 @@ This codebase is primarily experiment-driven and educational/research oriented.
 
 ```text
 .
-├── README.md
-├── proposal/
-│   ├── Project Proposal.md
-│   └── Project Proposal.pdf
-└── src/
-    ├── math/           # matrix ops, AST, differentiator, optimizers, augmentation
-    ├── ml/             # ML models and utilities
-    └── experiments/
-        ├── classification/
-        ├── recommender/
-        └── ndtictactoe/
+├── CMakeLists.txt      # unified build (classification + ndtictactoe binaries)
+├── lib/
+│   ├── math/           # matrix ops, AST, differentiator, optimizers, augmentation
+│   └── ml/             # ML models and utilities
+├── experiments/
+│   ├── classification/
+│   ├── recommender/
+│   └── ndtictactoe/
+└── proposal/
+    ├── Project Proposal.md
+    └── Project Proposal.pdf
 ```
 
 ## Implemented components
 
-### `src/math`
+### `lib/math`
 
 - `matrix.*`
   - Dense matrix class
@@ -58,7 +58,7 @@ This codebase is primarily experiment-driven and educational/research oriented.
   - Feature expansion (`poly_2` to `poly_5`)
   - Random Fourier feature projection
 
-### `src/ml`
+### `lib/ml`
 
 - Supervised:
   - Perceptron (`perceptron.*`)
@@ -82,8 +82,8 @@ This codebase is primarily experiment-driven and educational/research oriented.
 
 ### Core
 
-- C++17+ compiler (`g++` used by provided Makefiles)
-- `make`
+- C++17+ compiler (`g++` or `clang++`; CMake targets use C++20)
+- `make` (per-experiment builds) or CMake 3.16+ (unified build from the repo root)
 
 ### Recommender experiment extras
 
@@ -99,12 +99,28 @@ This codebase is primarily experiment-driven and educational/research oriented.
 
 ## Build and run
 
-Each experiment has its own Makefile.
+### CMake (recommended)
+
+From the repository root:
+
+```bash
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --parallel
+```
+
+This produces `build/classification`, `build/tictactoe`, and `build/ttt_main`.  
+Include paths use `-I lib` so sources include headers as `"math/..."` and `"ml/..."`.
+
+### Make (per experiment)
+
+Each experiment directory still has a `Makefile` for direct `g++` builds.
 
 ### 1) Classification (Iris)
 
+Run from `experiments/classification` so `Iris.csv` resolves.
+
 ```bash
-cd src/experiments/classification
+cd experiments/classification
 make
 ./main
 ```
@@ -112,7 +128,7 @@ make
 ### 2) Recommender (KMeans + PCA + MAB/UCB)
 
 ```bash
-cd src/experiments/recommender
+cd experiments/recommender
 make
 ./main
 ```
@@ -120,7 +136,7 @@ make
 ### 3) N-dimensional Tic-Tac-Toe RL (DQN/REINFORCE)
 
 ```bash
-cd src/experiments/ndtictactoe
+cd experiments/ndtictactoe
 make
 ./tictactoe
 ```
@@ -128,14 +144,14 @@ make
 There is also an alternate RL driver:
 
 ```bash
-cd src/experiments/ndtictactoe
-g++ -std=c++20 -O3 ttt_main.cpp tictactoe.cpp replaymemory.cpp dqn.cpp sample.cpp ../../math/matrix.cpp ../../ml/nn.cpp -o ttt_main
+cd experiments/ndtictactoe
+g++ -std=c++20 -O3 -I../../lib ttt_main.cpp tictactoe.cpp replaymemory.cpp dqn.cpp sample.cpp ../../lib/math/matrix.cpp ../../lib/ml/nn.cpp -o ttt_main
 ./ttt_main
 ```
 
 ## Experiments
 
-### Classification (`src/experiments/classification`)
+### Classification (`experiments/classification`)
 
 - Loads `Iris.csv`
 - Performs train/test split and feature normalization
@@ -146,7 +162,7 @@ g++ -std=c++20 -O3 ttt_main.cpp tictactoe.cpp replaymemory.cpp dqn.cpp sample.cp
   - Linear regression scoring variant
   - Feedforward NN classifier
 
-### Recommender (`src/experiments/recommender`)
+### Recommender (`experiments/recommender`)
 
 - Loads `processed_data.csv`
 - Uses selected audio features to:
@@ -157,7 +173,7 @@ g++ -std=c++20 -O3 ttt_main.cpp tictactoe.cpp replaymemory.cpp dqn.cpp sample.cp
 - Writes experiment metrics to JSON result files
 - Includes optional Spotify track/image lookup utilities (requires auth token handling in code)
 
-### N-D Tic-Tac-Toe RL (`src/experiments/ndtictactoe`)
+### N-D Tic-Tac-Toe RL (`experiments/ndtictactoe`)
 
 - Environment supports variable board size (`N x N`)
 - Agents:
@@ -171,17 +187,19 @@ g++ -std=c++20 -O3 ttt_main.cpp tictactoe.cpp replaymemory.cpp dqn.cpp sample.cp
 
 ## Data and artifacts
 
-This repository currently contains large generated artifacts (especially RL model checkpoints):
+This repository may contain large generated artifacts (especially RL model checkpoints):
 
-- Most disk usage is under `src/experiments/ndtictactoe/models-and-data`
+- Most disk usage is under `experiments/ndtictactoe/models-and-data`
 - Recommender also includes large CSV datasets and many JSON outputs
 
-If you want a lightweight dev version, consider pruning `.model` files and old experiment outputs before cloning/sharing.
+The root `.gitignore` ignores common build products and `*.model` checkpoints so new artifacts do not clutter commits. For a lightweight tree, prune existing checkpoints and old experiment outputs locally.
+
+Prefer writing new checkpoints under a dedicated directory (for example a local `artifacts/` folder) and running experiments from the directory where relative data paths resolve.
 
 ## Known limitations
 
 - Some planned features in comments/proposal are partial or not productionized.
-- `src/math/token.hpp` lexer/parser scaffolding is incomplete.
+- `lib/math/token.hpp` lexer/parser scaffolding is incomplete.
 - Several scripts/flows assume local environment details (Python version, headers, OS commands).
 - Minimal automated test coverage is included in-repo.
 - Documentation quality is uneven across source files.

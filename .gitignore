@@ -1,0 +1,33 @@
+# Build outputs
+build/
+cmake-build-*/
+out/
+*.o
+*.a
+*.dylib
+*.so
+*.exe
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
+_deps/
+
+# IDE / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*~
+
+# Training / experiment artifacts (regenerate locally)
+*.model
+__pycache__/
+*.pyc
+
+# Optional: large local result trees (uncomment if you do not track these)
+# experiments/ndtictactoe/models-and-data/
