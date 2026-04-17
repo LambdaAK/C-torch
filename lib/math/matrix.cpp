@@ -1,4 +1,5 @@
 #include "matrix.hpp"
+#include <algorithm>
 #include <cmath>
 #include <stdexcept>
 #include <iostream>
@@ -28,6 +29,18 @@ Matrix::Matrix() : rows(1), cols(1), data(1, 0.0) {}
 
 // Copy constructor
 Matrix::Matrix(const Matrix &other) = default;
+
+Matrix &Matrix::operator=(const Matrix &other)
+{
+    if (this == &other)
+    {
+        return *this;
+    }
+    rows = other.rows;
+    cols = other.cols;
+    data = other.data;
+    return *this;
+}
 
 Matrix Matrix::eye(size_t dim)
 {
@@ -338,12 +351,14 @@ Matrix Matrix::l2_norm_cols(const Matrix &X)
         }
     }
 
+    constexpr float kEps = 1e-12f;
     Matrix Norm_X = X;
     for (size_t i = 0; i < X.numRows(); ++i)
     {
         for (size_t j = 0; j < X.numCols(); ++j)
         {
-            Norm_X(i, j) = Norm_X(i, j) / std::sqrt(l2_norms[j]);
+            const float denom = std::sqrt(std::max(l2_norms[j], kEps));
+            Norm_X(i, j) = Norm_X(i, j) / denom;
         }
     }
 

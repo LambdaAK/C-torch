@@ -18,7 +18,10 @@ This codebase is primarily experiment-driven and educational/research oriented.
 5. [Experiments](#experiments)
 6. [Data and artifacts](#data-and-artifacts)
 7. [Known limitations](#known-limitations)
-8. [Project proposal](#project-proposal)
+8. [Contributing](#contributing)
+9. [Kernel SVM and Random Fourier notes](#kernel-svm-and-random-fourier-notes)
+10. [Future work](#future-work)
+11. [Project proposal](#project-proposal)
 
 ## Repository layout
 
@@ -65,8 +68,8 @@ This codebase is primarily experiment-driven and educational/research oriented.
 - Supervised:
   - Perceptron (`perceptron.*`)
   - Linear SVM (`svm.*`)
-  - Kernel SVM (`kernelsvm.*`)
-  - Random Fourier SVM (`randomfouriersvm.*`)
+  - Kernel SVM (`kernelsvm.*`) — RBF kernel `exp(-gamma * ||x-y||^2)` (see [notes](#kernel-svm-and-random-fourier-notes))
+  - Random Fourier SVM (`randomfouriersvm.*`) — cosine features with `gamma`-linked random frequencies (same section)
   - Logistic Regression (`logisticregression.*`)
   - Linear Regression (`linearregression.*`)
   - KNN (`knn.*`)
@@ -150,12 +153,17 @@ Each experiment directory still has a `Makefile` for direct `g++` builds.
 
 ### 1) Classification (Iris)
 
-Run from `experiments/classification` so `Iris.csv` resolves.
+From `experiments/classification`, `Iris.csv` resolves by default. From the **repo root** (CMake `build/classification`), set **`CTORCH_IRIS_CSV`** to the CSV path (CI does this automatically).
 
 ```bash
 cd experiments/classification
 make
 ./main
+```
+
+```bash
+# from repository root, after CMake build
+CTORCH_IRIS_CSV="$PWD/experiments/classification/Iris.csv" ./build/classification
 ```
 
 ### 2) Recommender (KMeans + PCA + MAB/UCB)
@@ -186,7 +194,7 @@ g++ -std=c++20 -O3 -I../../lib ttt_main.cpp tictactoe.cpp replaymemory.cpp dqn.c
 
 ### Classification (`experiments/classification`)
 
-- Loads `Iris.csv`
+- Loads `Iris.csv` (or the path in **`CTORCH_IRIS_CSV`** if set)
 - Performs train/test split and feature normalization
 - Runs:
   - Linear SVM
@@ -247,6 +255,20 @@ Prefer writing new checkpoints under a local **`artifacts/`** directory (tracked
 - Several scripts/flows assume local environment details (Python version, headers, OS commands).
 - Automated tests cover selected `lib` and DQN behaviors (`ctest` / `ctorch_tests`); coverage is not exhaustive.
 - Documentation quality is uneven across source files.
+
+## Contributing
+
+- Configure and build from the repository root with CMake, then run **`ctest --test-dir build --output-on-failure`** before opening a pull request.
+- Prefer small, focused changes; match existing style and include tests when you add or fix behavior.
+
+## Kernel SVM and Random Fourier notes
+
+- **Kernel SVM (RBF):** `kernelsvm` uses `exp(-gamma * d^2)` where `d` is the Euclidean distance between row vectors.
+- **Random Fourier SVM:** Each row of `W` is drawn from a Gaussian with standard deviation `sqrt(2 * gamma)`, and each phase in `b` is uniform on `[0, 2π)`. That ties `gamma` to the usual RBF bandwidth in a Random Fourier-style approximation; results are educational and may differ from another library’s exact defaults.
+
+## Future work
+
+Examples aligned with the original proposal: richer automatic differentiation, additional models (e.g. trees, gradient boosting), better serialization and experiment configs, and broader test coverage for RL and recommender paths.
 
 ## Project proposal
 

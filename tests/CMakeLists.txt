@@ -20,9 +20,14 @@ add_executable(ctorch_tests
     test_pca.cpp
     test_gaussian_nb.cpp
     test_dqn.cpp
+    test_smoke_iris.cpp
+    test_replay_memory.cpp
 )
 
 target_link_libraries(ctorch_tests PRIVATE ctorch GTest::gtest_main)
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
+    target_compile_options(ctorch_tests PRIVATE -Wall -Wextra)
+endif()
 
 target_include_directories(ctorch_tests PRIVATE
     ${CMAKE_SOURCE_DIR}/lib

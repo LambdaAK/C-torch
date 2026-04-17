@@ -22,3 +22,13 @@ TEST(Matrix, Transpose) {
     EXPECT_DOUBLE_EQ(t(1, 0), 2.0);
     EXPECT_DOUBLE_EQ(t(1, 1), 4.0);
 }
+
+TEST(Matrix, CopyAssignment) {
+    Matrix a({{1.0, 2.0}});
+    Matrix b;
+    b = a;
+    EXPECT_DOUBLE_EQ(b(0, 0), 1.0);
+    EXPECT_DOUBLE_EQ(b(0, 1), 2.0);
+    b(0, 0) = 9.0;
+    EXPECT_DOUBLE_EQ(a(0, 0), 1.0);
+}

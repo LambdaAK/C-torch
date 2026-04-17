@@ -3,6 +3,9 @@
 #include "math/dataaugmentor.hpp"
 #include <random>
 #include <cmath>
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
 #include "svm.hpp"
 
 namespace ml
@@ -20,15 +23,17 @@ namespace ml
 
         std::random_device rd;
         std::mt19937 gen(rd());
-        std::normal_distribution<double> dist(0.0, 1.0);
+        const double w_std = std::sqrt(2.0 * gamma + 1e-15);
+        std::normal_distribution<double> w_dist(0.0, w_std);
+        std::uniform_real_distribution<double> b_dist(0.0, 2.0 * M_PI);
 
         for (int i = 0; i < D; ++i)
         {
             for (size_t j = 0; j < xTr.numCols(); ++j)
             {
-                W(i, j) = dist(gen);
+                W(i, j) = w_dist(gen);
             }
-            b(i, 0) = dist(gen);
+            b(i, 0) = b_dist(gen);
         }
 
         // Transform the training data

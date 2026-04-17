@@ -71,12 +71,11 @@ namespace ml
             return std::pow(1 + x1.inner_product(x2), 3);
         }
 
+        /** Standard RBF (Gaussian) kernel: exp(-gamma * ||x1 - x2||^2). */
         static double radial_basis(const Matrix &x1, const Matrix &x2, double gamma = 1.0)
         {
-            // use gamma = 1
-            // compute the distance between the two vectors
-            double distance = std::pow(x1.euclideanDistance(x2), 1e-2);
-            return std::exp(-distance);
+            const double d = x1.euclideanDistance(x2);
+            return std::exp(-gamma * d * d);
         }
 
         static double kernel(const Matrix &x, const Matrix &y, KernelOptions kernel_options)

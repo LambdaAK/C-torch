@@ -1,4 +1,5 @@
 #include "pca.hpp"
+#include <stdexcept>
 
 namespace ml {
 
@@ -79,6 +80,12 @@ namespace ml {
 
   Matrix PCA::compute_projection_mat(int k, int max_iter, float tol) {
     size_t n = Cov.numRows();
+    if (k < 1) {
+      throw std::invalid_argument("PCA::compute_projection_mat: k must be >= 1.");
+    }
+    if (static_cast<size_t>(k) > n) {
+      throw std::invalid_argument("PCA::compute_projection_mat: k cannot exceed covariance dimension.");
+    }
     Matrix Ak = Cov;
     Matrix Q_total = Matrix::eye(n);
 

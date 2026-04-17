@@ -20,6 +20,7 @@ public:
     Matrix(size_t rows, size_t cols);
     Matrix(std::initializer_list<std::initializer_list<double>> init_list);
     Matrix(const Matrix &other);
+    Matrix &operator=(const Matrix &other);
 
     // Static methods
     static Matrix eye(size_t dim);

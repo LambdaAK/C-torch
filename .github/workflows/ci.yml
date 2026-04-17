@@ -44,5 +44,6 @@ jobs:
         run: ctest --test-dir build --output-on-failure
 
       - name: Smoke run (classification)
-        working-directory: experiments/classification
-        run: ../../build/classification
+        env:
+          CTORCH_IRIS_CSV: ${{ github.workspace }}/experiments/classification/Iris.csv
+        run: ./build/classification

@@ -134,8 +134,6 @@ void train_reinforce(ml::Sequential policy_net, ml::Sequential critic_net, std::
     bool done = false;
     bool agent_turn = true; 
 
-    float episode_reward = 0.0f;
-
     while (!done)
     {
       std::vector<int> valid_actions = env.get_valid_actions();
@@ -145,7 +143,6 @@ void train_reinforce(ml::Sequential policy_net, ml::Sequential critic_net, std::
         int action = agent.act(batch_count, state, valid_actions);
 
         auto [next_state, reward] = env.step(action);
-        episode_reward += reward;
         agent.update_last_reward(batch_count, reward);
 
         done = env.is_game_over();
@@ -155,9 +152,8 @@ void train_reinforce(ml::Sequential policy_net, ml::Sequential critic_net, std::
       {
         std::uniform_int_distribution<> action_dis(0, valid_actions.size() - 1);
         int action = valid_actions[action_dis(gen)];
-        auto [next_state, reward] = env.step(action);
+        auto next_state = env.step(action).first;
 
-        episode_reward -= reward;
         done = env.is_game_over();
         state = next_state;
       }
@@ -323,7 +319,7 @@ int play(const std::string &model_path, size_t board_size, bool random_human, ml
         {
           std::cout << "Enter your move (0-" << (board_size * board_size - 1) << "): ";
           std::cin >> action;
-          if (action < 0 || action >= board_size * board_size)
+          if (action < 0 || action >= static_cast<int>(board_size * board_size))
           {
             std::cout << "Invalid move! Please enter a number between 0 and " << (board_size * board_size - 1) << "." << std::endl;
             continue;
@@ -418,7 +414,7 @@ int play_reinforce(const std::string &model_path, size_t board_size, bool random
         {
           std::cout << "Enter your move (0-" << (board_size * board_size - 1) << "): ";
           std::cin >> action;
-          if (action < 0 || action >= board_size * board_size)
+          if (action < 0 || action >= static_cast<int>(board_size * board_size))
           {
             std::cout << "Invalid move! Please enter a number between 0 and " << (board_size * board_size - 1) << "." << std::endl;
             continue;

@@ -31,6 +31,9 @@ add_library(ctorch STATIC ${CTORCH_SOURCES})
 target_include_directories(ctorch PUBLIC
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/lib>
 )
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
+    target_compile_options(ctorch PRIVATE -Wall -Wextra)
+endif()
 
 add_executable(classification experiments/classification/main.cpp)
 target_include_directories(classification PRIVATE
@@ -38,6 +41,9 @@ target_include_directories(classification PRIVATE
     ${CMAKE_SOURCE_DIR}/experiments/recommender
 )
 target_link_libraries(classification PRIVATE ctorch)
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
+    target_compile_options(classification PRIVATE -Wall -Wextra)
+endif()
 
 set(NDTICTACTOE_RL_SOURCES
     experiments/ndtictactoe/tictactoe.cpp
@@ -53,6 +59,9 @@ target_include_directories(tictactoe PRIVATE
     ${CMAKE_SOURCE_DIR}/experiments/ndtictactoe
 )
 target_link_libraries(tictactoe PRIVATE ctorch)
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
+    target_compile_options(tictactoe PRIVATE -Wall -Wextra)
+endif()
 
 add_executable(ttt_main
     experiments/ndtictactoe/ttt_main.cpp
@@ -66,6 +75,9 @@ target_include_directories(ttt_main PRIVATE
     ${CMAKE_SOURCE_DIR}/experiments/ndtictactoe
 )
 target_link_libraries(ttt_main PRIVATE ctorch)
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
+    target_compile_options(ttt_main PRIVATE -Wall -Wextra)
+endif()
 
 option(CTORCH_BUILD_TESTS "Build GoogleTest unit tests (downloads googletest)" ON)
 include(CTest)

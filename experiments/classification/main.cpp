@@ -15,6 +15,7 @@
 #include <unordered_set>
 #include <vector>
 #include <filesystem>
+#include <cstdlib>
 
 #include "math/matrix.hpp"
 #include "math/ast.hpp"
@@ -153,7 +154,10 @@ int main()
 
     int num_samples = 150;
 
-    io::CSVReader<5> in("Iris.csv");
+    const char *iris_env = std::getenv("CTORCH_IRIS_CSV");
+    const std::string iris_csv = iris_env ? std::string(iris_env) : std::string("Iris.csv");
+
+    io::CSVReader<5> in(iris_csv);
     in.read_header(io::ignore_extra_column,
                    "SepalLengthCm", "SepalWidthCm", "PetalLengthCm", "PetalWidthCm", "Species");
 
@@ -161,7 +165,7 @@ int main()
     float temp1, temp2, temp3, temp4;
     std::string temp5;
 
-    io::CSVReader<5> counter("Iris.csv");
+    io::CSVReader<5> counter(iris_csv);
     counter.read_header(io::ignore_extra_column,
                         "SepalLengthCm", "SepalWidthCm", "PetalLengthCm", "PetalWidthCm", "Species");
 
@@ -194,7 +198,7 @@ int main()
     int num_setosa = 0;
     size_t current_row = 0;
 
-    io::CSVReader<5> sampler("Iris.csv");
+    io::CSVReader<5> sampler(iris_csv);
     sampler.read_header(io::ignore_extra_column,
                         "SepalLengthCm", "SepalWidthCm", "PetalLengthCm", "PetalWidthCm", "Species");
 
