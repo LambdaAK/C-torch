@@ -36,6 +36,7 @@
 #include <memory>
 #include <stdexcept>
 #include <array>
+#include <cstdint>
 #include <random>
 #include <algorithm>
 #include <chrono>
@@ -66,6 +67,8 @@ struct DQNConfig {
     int num_training_episodes;
     std::string architecture_string;
     int board_dimension = 3; // default to 3x3
+    /** 0 = seed from std::random_device; otherwise fixed seed for reproducible training/eval RNG. */
+    std::uint64_t training_rng_seed = 0;
 };
 
 struct ExperimentConfig {
@@ -74,20 +77,71 @@ struct ExperimentConfig {
     // a lambda for getting the folder name for an experiment - takes as input a DQNConfig and returns a string
     std::function<std::string(DQNConfig)> get_folder_name;
     int board_dim = 3; // default to 3x3
+    /** Applied when a DQNConfig has training_rng_seed == 0 (e.g. sweep baseline). */
+    std::uint64_t default_training_rng_seed = 0;
 };
 
+namespace {
+
+int dqn_state_dim(int board_dim) { return 2 * board_dim * board_dim; }
+
+int dqn_action_dim(int board_dim) { return board_dim * board_dim; }
+
+std::mt19937 make_training_rng(std::uint64_t seed) {
+    if (seed == 0) {
+        std::random_device rd;
+        return std::mt19937(rd());
+    }
+    std::uint32_t mixed = static_cast<std::uint32_t>(seed ^ (seed >> 32));
+    if (mixed == 0) {
+        mixed = 1;
+    }
+    return std::mt19937(mixed);
+}
+
+ml::Sequential make_dqn_two_block_mlp(int in_dim, int hidden, int out_dim) {
+    ml::Sequential net;
+    net.add_layer(std::make_shared<ml::LinearLayer>(in_dim, hidden));
+    net.add_layer(std::make_shared<ml::ReLULayer>());
+    net.add_layer(std::make_shared<ml::LinearLayer>(hidden, hidden));
+    net.add_layer(std::make_shared<ml::ReLULayer>());
+    net.add_layer(std::make_shared<ml::LinearLayer>(hidden, out_dim));
+    return net;
+}
+
+ml::Sequential make_dqn_three_block_mlp(int in_dim, int hidden, int out_dim) {
+    ml::Sequential net;
+    net.add_layer(std::make_shared<ml::LinearLayer>(in_dim, hidden));
+    net.add_layer(std::make_shared<ml::ReLULayer>());
+    net.add_layer(std::make_shared<ml::LinearLayer>(hidden, hidden));
+    net.add_layer(std::make_shared<ml::ReLULayer>());
+    net.add_layer(std::make_shared<ml::LinearLayer>(hidden, hidden));
+    net.add_layer(std::make_shared<ml::ReLULayer>());
+    net.add_layer(std::make_shared<ml::LinearLayer>(hidden, out_dim));
+    return net;
+}
+
+/** Matches comment style: in -> h, ReLU, then (Linear h->h, ReLU) repeated relu_sections times, Linear h->out. */
+ml::Sequential make_dqn_stacked_hidden_mlp(int in_dim, int hidden, int relu_sections, int out_dim) {
+    ml::Sequential net;
+    net.add_layer(std::make_shared<ml::LinearLayer>(in_dim, hidden));
+    net.add_layer(std::make_shared<ml::ReLULayer>());
+    for (int s = 0; s < relu_sections; ++s) {
+        net.add_layer(std::make_shared<ml::LinearLayer>(hidden, hidden));
+        net.add_layer(std::make_shared<ml::ReLULayer>());
+    }
+    net.add_layer(std::make_shared<ml::LinearLayer>(hidden, out_dim));
+    return net;
+}
+
+} // namespace
+
 /**
- * Create a neural network for this experiments
- * It has the following architecture: `18 -> 32 -> ReLU -> 32 -> ReLU -> 9`
+ * Default 3x3 DQN MLP: state 18 -> two 32-wide hidden blocks -> 9 actions.
  */
 ml::Sequential create_network() {
-    ml::Sequential net;
-    net.add_layer(std::make_shared<ml::LinearLayer>(18, 32));
-    net.add_layer(std::make_shared<ml::ReLULayer>());
-    net.add_layer(std::make_shared<ml::LinearLayer>(32, 32));
-    net.add_layer(std::make_shared<ml::ReLULayer>());
-    net.add_layer(std::make_shared<ml::LinearLayer>(32, 9));
-    return net;
+    const int bd = 3;
+    return make_dqn_two_block_mlp(dqn_state_dim(bd), 32, dqn_action_dim(bd));
 }
 
 void validate_config(const DQNConfig& config) {
@@ -122,6 +176,7 @@ void validate_config(const DQNConfig& config) {
 }
 
 DQNAgent create_agent(DQNConfig config, std::string file_path, bool eval_mode, int board_dim) {
+    (void)board_dim; // reserved for shape checks vs. saved weights
     ml::Sequential q_net = config.create_network();
     ml::Sequential target_net = config.create_network();
 
@@ -136,7 +191,8 @@ DQNAgent create_agent(DQNConfig config, std::string file_path, bool eval_mode, i
     }
     return agent;
 }
-DQNAgent train_agent(DQNConfig config, std::function<std::string(DQNConfig)> get_folder_name, int board_dim) {
+DQNAgent train_agent(DQNConfig config, std::function<std::string(DQNConfig)> get_folder_name, int board_dim,
+                     std::uint64_t experiment_default_rng_seed = 0) {
     
     ml::Sequential q_net = config.create_network();
     ml::Sequential target_net = config.create_network();
@@ -149,12 +205,16 @@ DQNAgent train_agent(DQNConfig config, std::function<std::string(DQNConfig)> get
                    std::stof(config.epsilon_decay), std::stof(config.gamma), std::stof(config.learning_rate),
                    std::stoi(config.batch_size), 10000, std::stoi(config.update_frequency));
     
-    TicTacToe env(board_dim);
+    const int train_board = board_dim;
+    TicTacToe env(train_board);
 
-    std::cout << "board dimension: " << board_dim << std::endl;
+    std::cout << "board dimension: " << train_board << std::endl;
 
-    std::random_device rd;
-    std::mt19937 gen(rd());
+    std::uint64_t seed = config.training_rng_seed;
+    if (seed == 0 && experiment_default_rng_seed != 0) {
+        seed = experiment_default_rng_seed;
+    }
+    std::mt19937 gen = make_training_rng(seed);
     std::uniform_int_distribution<> dis(0, 1);
     
     std::string folder_name = get_folder_name(config);
@@ -233,13 +293,16 @@ int episode_number_from_file_name(std::string file_name) {
     }
 }
 
-std::vector<int> test_agent_against_random(DQNConfig config, std::string file_path, bool eval_mode, int board_dim) {
+std::vector<int> test_agent_against_random(DQNConfig config, std::string file_path, bool eval_mode, int board_dim,
+                                           std::uint64_t experiment_default_rng_seed = 0) {
     DQNAgent agent = create_agent(config, file_path, eval_mode, board_dim);
     
     TicTacToe env(board_dim); // n x n board
-    // Random number generator for random player
-    std::random_device rd;
-    std::mt19937 gen(rd());
+    std::uint64_t seed = config.training_rng_seed;
+    if (seed == 0 && experiment_default_rng_seed != 0) {
+        seed = experiment_default_rng_seed;
+    }
+    std::mt19937 gen = make_training_rng(seed);
     
     int agent_wins = 0;
     int random_wins = 0;
@@ -369,14 +432,15 @@ void play_many_random_games(ml::Sequential net, int board_dimension, int num_gam
    
 }
 
-std::map<int, std::vector<int>> test_all_models_for_epsilon_decay(DQNConfig config, std::vector<std::string> folder_files, int board_dim) {
+std::map<int, std::vector<int>> test_all_models_for_epsilon_decay(DQNConfig config, std::vector<std::string> folder_files, int board_dim,
+                                                                  std::uint64_t experiment_default_rng_seed = 0) {
     // map the number of episodes trained to the results of that model
     std::map<int, std::vector<int>> results;
 
     for (std::string file_name : folder_files) {
         PRINT("Testing " << file_name);
         int num_episodes = episode_number_from_file_name(file_name);
-        std::vector<int> result = test_agent_against_random(config, file_name, true, board_dim);
+        std::vector<int> result = test_agent_against_random(config, file_name, true, board_dim, experiment_default_rng_seed);
         results[num_episodes] = result;
     }
     
@@ -541,6 +605,7 @@ ExperimentConfig epsilon_decay_experiment(int board_dim = 3) {
         return "epsilon_decay=" + config.epsilon_decay;
     };
     experiment_config.board_dim = board_dim;
+    experiment_config.default_training_rng_seed = 42;
     DQNConfig base_config;
     base_config.gamma = "0.99995";
     base_config.epsilon_start = "0.9";
@@ -556,6 +621,7 @@ ExperimentConfig epsilon_decay_experiment(int board_dim = 3) {
         DQNConfig config = base_config;
         config.epsilon_decay = epsilon_decay_value;
         config.create_network = create_network;
+        config.board_dimension = board_dim;
         config.num_training_episodes = 10000;
         experiment_config.configs.push_back(config);
     }
@@ -577,6 +643,8 @@ ExperimentConfig gamma_experiment() {
     base_config.learning_rate = "0.001";
     base_config.batch_size = "64";
     base_config.num_training_episodes = 10000;
+    experiment_config.board_dim = 3;
+    experiment_config.default_training_rng_seed = 42;
 
     std::vector<std::string> gamma_values = {
         "0.2",
@@ -593,6 +661,7 @@ ExperimentConfig gamma_experiment() {
         DQNConfig config = base_config;
         config.gamma = gamma_value;
         config.create_network = create_network;
+        config.board_dimension = experiment_config.board_dim;
         config.num_training_episodes = 10000;
         experiment_config.configs.push_back(config);
     }
@@ -607,13 +676,15 @@ void run_experiment(ExperimentConfig experiment_config) {
     // train the models
     for (DQNConfig config : experiment_config.configs) {
         std::string config_folder = experiment_config.experiment_name + "/" + experiment_config.get_folder_name(config);
-        train_agent(config, [config_folder](DQNConfig config) { return config_folder; }, experiment_config.board_dim);
+        train_agent(config, [config_folder](DQNConfig) { return config_folder; }, experiment_config.board_dim,
+                      experiment_config.default_training_rng_seed);
     }
 
     // evaluate the models and output the performance results to a CSV files
     for (DQNConfig config : experiment_config.configs) {
         std::vector<std::string> model_files = get_model_files(experiment_config.experiment_name + "/" + experiment_config.get_folder_name(config));
-        std::map<int, std::vector<int>> results = test_all_models_for_epsilon_decay(config, model_files, experiment_config.board_dim);
+        std::map<int, std::vector<int>> results = test_all_models_for_epsilon_decay(config, model_files, experiment_config.board_dim,
+                                                                                     experiment_config.default_training_rng_seed);
         save_results_to_csv(results, experiment_config.experiment_name + "/" + experiment_config.get_folder_name(config) + "_results.csv");
     }
     
@@ -626,6 +697,8 @@ ExperimentConfig learning_rate_experiment() {
    experiment_config.get_folder_name = [](DQNConfig config) {
         return "learning_rate=" + config.learning_rate;
    };
+   experiment_config.board_dim = 3;
+   experiment_config.default_training_rng_seed = 42;
 
    DQNConfig base_config;
    base_config.epsilon_decay = "0.9";
@@ -653,6 +726,7 @@ ExperimentConfig learning_rate_experiment() {
     DQNConfig config = base_config;
     config.learning_rate = learning_rate;
     config.create_network = create_network;
+    config.board_dimension = experiment_config.board_dim;
     config.num_training_episodes = 10000;
     experiment_config.configs.push_back(config);
    }
@@ -666,6 +740,8 @@ ExperimentConfig dummy_experiment() {
     experiment_config.get_folder_name = [](DQNConfig config) {
         return "dummy_experiment = " + config.epsilon_decay;
     };
+    experiment_config.board_dim = 3;
+    experiment_config.default_training_rng_seed = 42;
 
     DQNConfig config;
     config.epsilon_decay = "0.99995";
@@ -687,8 +763,10 @@ ExperimentConfig dummy_experiment() {
     };
 
     for (std::string epsilon_decay : epsilon_decay_values) {
-        config.epsilon_decay = epsilon_decay;
-        experiment_config.configs.push_back(config);
+        DQNConfig trial = config;
+        trial.epsilon_decay = epsilon_decay;
+        trial.board_dimension = experiment_config.board_dim;
+        experiment_config.configs.push_back(trial);
     }
 
     return experiment_config;
@@ -700,6 +778,8 @@ ExperimentConfig epsilon_minimum_value_experiment() {
     experiment_config.get_folder_name = [](DQNConfig config) {
         return "epsilon_minimum_value=" + config.epsilon_end;
     };
+    experiment_config.board_dim = 3;
+    experiment_config.default_training_rng_seed = 42;
 
     DQNConfig base_config;
     base_config.epsilon_decay = "0.99995";
@@ -724,8 +804,10 @@ ExperimentConfig epsilon_minimum_value_experiment() {
     };
 
     for (std::string epsilon_end : epsilon_end_values) {
-        base_config.epsilon_end = epsilon_end;
-        experiment_config.configs.push_back(base_config);
+        DQNConfig cfg = base_config;
+        cfg.epsilon_end = epsilon_end;
+        cfg.board_dimension = experiment_config.board_dim;
+        experiment_config.configs.push_back(cfg);
     }
     
     return experiment_config;
@@ -737,6 +819,8 @@ ExperimentConfig epsilon_start_value_experiment() {
     experiment_config.get_folder_name = [](DQNConfig config) {
         return "epsilon_start_value=" + config.epsilon_start;
     };
+    experiment_config.board_dim = 3;
+    experiment_config.default_training_rng_seed = 42;
 
     DQNConfig base_config;
     base_config.epsilon_decay = "0.9";
@@ -759,10 +843,12 @@ ExperimentConfig epsilon_start_value_experiment() {
     };
 
     for (std::string epsilon_start : epsilon_start_values) {
-        base_config.epsilon_start = epsilon_start;
-        base_config.create_network = create_network;
-        base_config.num_training_episodes = 10000;
-        experiment_config.configs.push_back(base_config);
+        DQNConfig cfg = base_config;
+        cfg.epsilon_start = epsilon_start;
+        cfg.create_network = create_network;
+        cfg.board_dimension = experiment_config.board_dim;
+        cfg.num_training_episodes = 10000;
+        experiment_config.configs.push_back(cfg);
     }
 
     return experiment_config;
@@ -774,6 +860,8 @@ ExperimentConfig batch_size_experiment() {
     experiment_config.get_folder_name = [](DQNConfig config) {
         return "batch_size=" + config.batch_size;
     };
+    experiment_config.board_dim = 3;
+    experiment_config.default_training_rng_seed = 42;
 
     DQNConfig base_config;
     base_config.epsilon_decay = "0.999";
@@ -797,10 +885,12 @@ ExperimentConfig batch_size_experiment() {
     };
 
     for (std::string batch_size : batch_size_values) {
-        base_config.batch_size = batch_size;
-        base_config.create_network = create_network;
-        base_config.num_training_episodes = 10000;
-        experiment_config.configs.push_back(base_config);
+        DQNConfig cfg = base_config;
+        cfg.batch_size = batch_size;
+        cfg.create_network = create_network;
+        cfg.board_dimension = experiment_config.board_dim;
+        cfg.num_training_episodes = 10000;
+        experiment_config.configs.push_back(cfg);
     }
 
     return experiment_config;
@@ -812,6 +902,8 @@ ExperimentConfig update_frequency_experiment() {
     experiment_config.get_folder_name = [](DQNConfig config) {
         return "update_frequency=" + config.update_frequency;
     };
+    experiment_config.board_dim = 3;
+    experiment_config.default_training_rng_seed = 42;
 
     DQNConfig base_config;
     base_config.epsilon_decay = "0.99";
@@ -834,8 +926,10 @@ ExperimentConfig update_frequency_experiment() {
     };
 
     for (std::string update_frequency : update_frequency_values) {
-        base_config.update_frequency = update_frequency;
-        experiment_config.configs.push_back(base_config);
+        DQNConfig cfg = base_config;
+        cfg.update_frequency = update_frequency;
+        cfg.board_dimension = experiment_config.board_dim;
+        experiment_config.configs.push_back(cfg);
     }
 
     return experiment_config;
@@ -844,19 +938,8 @@ ExperimentConfig update_frequency_experiment() {
 
 ExperimentConfig architecture_experiment() {
     /*
-        Use the following neural network architectures:
-        
-        Two nonlinear activations:
-        - 18 -> 64 -> ReLU -> 64 -> ReLU -> 9
-        - 18 -> 32 -> ReLU -> 32 -> ReLU -> 9
-        - 18 -> 16 -> ReLU -> 16 -> ReLU -> 9
-        - 18 -> 8 -> ReLU -> 8 -> ReLU -> 9
-        - 18 -> 4 -> ReLU -> 4 -> ReLU -> 9
-
-        Three nonlinear activation:
-        - 18 -> 16 -> ReLU -> 16 -> ReLU -> 16 -> ReLU -> 9
-        - 18 -> 8 -> ReLU -> 8 -> ReLU -> 8 -> ReLU -> 8 -> ReLU -> 9
-        - 18 -> 4 -> ReLU -> 4 -> ReLU -> 4 -> ReLU -> 4 -> ReLU -> 9
+        Widths and depths match the intended sweep; input/output dims follow board size
+        (e.g. 4x4 => state 32, actions 16).
     */
 
     ExperimentConfig experiment_config;
@@ -864,7 +947,37 @@ ExperimentConfig architecture_experiment() {
     experiment_config.get_folder_name = [](DQNConfig config) {
         return "architecture=" + config.architecture_string;
     };
-    experiment_config.board_dim = 4;
+    const int bd = 4;
+    experiment_config.board_dim = bd;
+    experiment_config.default_training_rng_seed = 42;
+
+    const int in_d = dqn_state_dim(bd);
+    const int out_d = dqn_action_dim(bd);
+
+    struct ArchSpec {
+        std::string label;
+        std::function<ml::Sequential()> factory;
+    };
+
+    const std::vector<ArchSpec> archs = {
+        {std::to_string(in_d) + " -> 64 -> ReLU -> 64 -> ReLU -> " + std::to_string(out_d),
+         [=]() { return make_dqn_two_block_mlp(in_d, 64, out_d); }},
+        {std::to_string(in_d) + " -> 32 -> ReLU -> 32 -> ReLU -> " + std::to_string(out_d),
+         [=]() { return make_dqn_two_block_mlp(in_d, 32, out_d); }},
+        {std::to_string(in_d) + " -> 16 -> ReLU -> 16 -> ReLU -> " + std::to_string(out_d),
+         [=]() { return make_dqn_two_block_mlp(in_d, 16, out_d); }},
+        {std::to_string(in_d) + " -> 8 -> ReLU -> 8 -> ReLU -> " + std::to_string(out_d),
+         [=]() { return make_dqn_two_block_mlp(in_d, 8, out_d); }},
+        {std::to_string(in_d) + " -> 4 -> ReLU -> 4 -> ReLU -> " + std::to_string(out_d),
+         [=]() { return make_dqn_two_block_mlp(in_d, 4, out_d); }},
+
+        {std::to_string(in_d) + " -> 16 -> ReLU -> 16 -> ReLU -> 16 -> ReLU -> " + std::to_string(out_d),
+         [=]() { return make_dqn_three_block_mlp(in_d, 16, out_d); }},
+        {std::to_string(in_d) + " -> 8 -> ReLU -> (8)x3 -> ReLU -> " + std::to_string(out_d),
+         [=]() { return make_dqn_stacked_hidden_mlp(in_d, 8, 3, out_d); }},
+        {std::to_string(in_d) + " -> 4 -> ReLU -> (4)x3 -> ReLU -> " + std::to_string(out_d),
+         [=]() { return make_dqn_stacked_hidden_mlp(in_d, 4, 3, out_d); }},
+    };
 
     DQNConfig base_config;
     base_config.epsilon_decay = "0.99";
@@ -873,44 +986,15 @@ ExperimentConfig architecture_experiment() {
     base_config.update_frequency = "10";
     base_config.learning_rate = "0.0001";
     base_config.batch_size = "64";
-    base_config.create_network = create_network;
     base_config.num_training_episodes = 10000;
     base_config.gamma = "0.9";
+    base_config.board_dimension = bd;
 
-
-    std::vector<std::string> architecture_strings = {
-        "18 -> 64 -> ReLU -> 64 -> ReLU -> 9",
-        "18 -> 32 -> ReLU -> 32 -> ReLU -> 9",
-        "18 -> 16 -> ReLU -> 16 -> ReLU -> 9",
-        "18 -> 8 -> ReLU -> 8 -> ReLU -> 9",
-        "18 -> 4 -> ReLU -> 4 -> ReLU -> 9",
-
-        "18 -> 16 -> ReLU -> 16 -> ReLU -> 16 -> ReLU -> 9",
-        "18 -> 8 -> ReLU -> 8 -> ReLU -> 8 -> ReLU -> 8 -> ReLU -> 9",
-        "18 -> 4 -> ReLU -> 4 -> ReLU -> 4 -> ReLU -> 4 -> ReLU -> 9"
-    };
-
-    // list of lambdas that create the networks
-    std::vector<std::function<ml::Sequential()>> create_network_lambdas = {
-        create_network,
-        create_network,
-        create_network,
-        create_network,
-        create_network,
-
-        create_network,
-        create_network,
-        create_network
-    };
-
-    if (architecture_strings.size() != create_network_lambdas.size()) {
-        throw std::runtime_error("architecture_strings and create_network_lambdas must have the same size in architecture_experiment");
-    }
-
-    for (size_t i = 0; i < architecture_strings.size(); i++) {
-        base_config.architecture_string = architecture_strings[i];
-        base_config.create_network = create_network_lambdas[i];
-        experiment_config.configs.push_back(base_config);
+    for (const ArchSpec& spec : archs) {
+        DQNConfig config = base_config;
+        config.architecture_string = spec.label;
+        config.create_network = spec.factory;
+        experiment_config.configs.push_back(config);
     }
 
     return experiment_config;
@@ -924,6 +1008,8 @@ ExperimentConfig reproduction_experiment() {
     experiment_config.get_folder_name = [](DQNConfig config) {
         return "trial=" + config.architecture_string;
     };
+    experiment_config.board_dim = 3;
+    experiment_config.default_training_rng_seed = 0;
 
     DQNConfig base_config;
 
@@ -945,8 +1031,11 @@ ExperimentConfig reproduction_experiment() {
     }
 
     for (std::string architecture_string : architecture_strings) {
-        base_config.architecture_string = architecture_string;
-        experiment_config.configs.push_back(base_config);
+        DQNConfig cfg = base_config;
+        cfg.architecture_string = architecture_string;
+        cfg.training_rng_seed = 900000u + static_cast<std::uint64_t>(std::stoul(architecture_string));
+        cfg.board_dimension = experiment_config.board_dim;
+        experiment_config.configs.push_back(cfg);
     }
 
     return experiment_config;
@@ -959,6 +1048,8 @@ ExperimentConfig train_single_model_config() {
     experiment_config.get_folder_name = [](DQNConfig config) {
         return "trial=" + config.architecture_string;
     };
+    experiment_config.board_dim = 3;
+    experiment_config.default_training_rng_seed = 42;
     
     DQNConfig base_config;
     base_config.epsilon_decay = "0.999";
@@ -970,6 +1061,7 @@ ExperimentConfig train_single_model_config() {
     base_config.gamma = "0.9";
     base_config.create_network = create_network;
     base_config.architecture_string = "1";
+    base_config.board_dimension = experiment_config.board_dim;
     base_config.num_training_episodes = 100;
 
     experiment_config.configs.push_back(base_config);
@@ -1049,11 +1141,12 @@ ExperimentConfig four_by_four_experiment_one() {
     ExperimentConfig experiment_config;
 
     experiment_config.experiment_name = "4x4 good architecture";
-    experiment_config.get_folder_name = [](DQNConfig config) {
+    experiment_config.get_folder_name = [](DQNConfig) {
         return "4x4";
     };
 
     experiment_config.board_dim = 4;
+    experiment_config.default_training_rng_seed = 42;
 
     experiment_config.configs.push_back(config);
 
@@ -1095,6 +1188,7 @@ ExperimentConfig four_by_four_experiment_two() {
     };
 
     experiment_config.board_dim = 4;
+    experiment_config.default_training_rng_seed = 42;
 
     experiment_config.configs.push_back(config);
 
@@ -1135,6 +1229,7 @@ ExperimentConfig four_by_four_experiment_three() {
     };
 
     experiment_config.board_dim = 4;
+    experiment_config.default_training_rng_seed = 42;
 
     experiment_config.configs.push_back(config);
 
@@ -1173,6 +1268,7 @@ ExperimentConfig four_by_four_experiment_four() {
     };
 
     experiment_config.board_dim = 4;
+    experiment_config.default_training_rng_seed = 42;
 
     experiment_config.configs.push_back(config);
 
@@ -1218,7 +1314,7 @@ void run_experiment_phase_one() {
         four_by_four_experiment_four(),
     };
 
-    for (int i = 0; i < experiment_configs.size(); i++) {
+    for (size_t i = 0; i < experiment_configs.size(); i++) {
         std::cout << (i + 1) << ". " << experiment_configs[i].experiment_name << std::endl;
     }
 
@@ -1228,7 +1324,7 @@ void run_experiment_phase_one() {
     
     std::cin >> index;
 
-    if (index < 1 || index > experiment_configs.size()) {
+    if (index < 1 || index > static_cast<int>(experiment_configs.size())) {
         std::cout << "Invalid index. Please try again." << std::endl;
         return run_experiment_phase_one();
     }
@@ -1384,7 +1480,7 @@ void run_load_model_phase_one() {
 
     std::cout << "To load a model, first, select the index of the model architecture you want to load:" << std::endl;
 
-    for (int i = 0; i < models.size(); i++) {
+    for (size_t i = 0; i < models.size(); i++) {
         std::cout << (i + 1) << ". " << models[i].architecture_string << std::endl;
     }
 
@@ -1392,7 +1488,7 @@ void run_load_model_phase_one() {
 
     std::cin >> index;
 
-    if (index < 1 || index > models.size()) {
+    if (index < 1 || index > static_cast<int>(models.size())) {
         std::cout << "Invalid index. Please try again." << std::endl;
         return run_load_model_phase_one();
     }

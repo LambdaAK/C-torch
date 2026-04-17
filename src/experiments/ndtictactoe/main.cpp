@@ -398,7 +398,6 @@ int play_reinforce(const std::string &model_path, size_t board_size, bool random
     {
       std::vector<float> state = env.get_state();
       std::vector<int> valid_actions = env.get_valid_actions();
-      std::cout << "REACH" << std::endl;
       action = agent.act(0, state, valid_actions, true, true);
       std::cout << "Agent plays position: " << action << std::endl;
     }
@@ -459,9 +458,6 @@ int play_reinforce(const std::string &model_path, size_t board_size, bool random
 
 Config make_config1(std::string model_path)
 {
-
-  std::cout << "aaaa" << std::endl;
-
   size_t board_size = 3;
 
   ml::Sequential q_net;
@@ -491,31 +487,19 @@ Config make_config2(std::string model_path)
 
   size_t board_size = 3;
 
-  std::shared_ptr<ml::LinearLayer> input = std::make_shared<ml::LinearLayer>(18, 64);
-  std::shared_ptr<ml::ReLULayer> r1 = std::make_shared<ml::ReLULayer>();
-  std::shared_ptr<ml::LinearLayer> h1 = std::make_shared<ml::LinearLayer>(64, 64);
-  std::shared_ptr<ml::ReLULayer> r2 = std::make_shared<ml::ReLULayer>();
-  std::shared_ptr<ml::LinearLayer> output = std::make_shared<ml::LinearLayer>(64, 9);
-
   ml::Sequential q_net;
-  q_net.add_layer(input);
-  q_net.add_layer(r1);
-  q_net.add_layer(h1);
-  q_net.add_layer(r2);
-  q_net.add_layer(output);
-
-  input = std::make_shared<ml::LinearLayer>(18, 128);
-  r1 = std::make_shared<ml::ReLULayer>();
-  h1 = std::make_shared<ml::LinearLayer>(128, 64);
-  r2 = std::make_shared<ml::ReLULayer>();
-  output = std::make_shared<ml::LinearLayer>(64, 9);
+  q_net.add_layer(std::make_shared<ml::LinearLayer>(18, 128));
+  q_net.add_layer(std::make_shared<ml::ReLULayer>());
+  q_net.add_layer(std::make_shared<ml::LinearLayer>(128, 64));
+  q_net.add_layer(std::make_shared<ml::ReLULayer>());
+  q_net.add_layer(std::make_shared<ml::LinearLayer>(64, 9));
 
   ml::Sequential target_net;
-  target_net.add_layer(input);
-  target_net.add_layer(r1);
-  target_net.add_layer(h1);
-  target_net.add_layer(r2);
-  target_net.add_layer(output);
+  target_net.add_layer(std::make_shared<ml::LinearLayer>(18, 128));
+  target_net.add_layer(std::make_shared<ml::ReLULayer>());
+  target_net.add_layer(std::make_shared<ml::LinearLayer>(128, 64));
+  target_net.add_layer(std::make_shared<ml::ReLULayer>());
+  target_net.add_layer(std::make_shared<ml::LinearLayer>(64, 9));
 
   Config config;
   config.board_size = board_size;
@@ -529,33 +513,19 @@ Config make_config3(std::string model_path)
 {
   size_t board_size = 4;
 
-  // 32 -> 128 -> ReLU -> 128 -> ReLU -> 16
-
-  std::shared_ptr<ml::LinearLayer> input = std::make_shared<ml::LinearLayer>(32, 128);
-  std::shared_ptr<ml::ReLULayer> r1 = std::make_shared<ml::ReLULayer>();
-  std::shared_ptr<ml::LinearLayer> h1 = std::make_shared<ml::LinearLayer>(128, 128);
-  std::shared_ptr<ml::ReLULayer> r2 = std::make_shared<ml::ReLULayer>();
-  std::shared_ptr<ml::LinearLayer> output = std::make_shared<ml::LinearLayer>(128, 16);
-
   ml::Sequential q_net;
-  q_net.add_layer(input);
-  q_net.add_layer(r1);
-  q_net.add_layer(h1);
-  q_net.add_layer(r2);
-  q_net.add_layer(output);
-
-  input = std::make_shared<ml::LinearLayer>(32, 128);
-  r1 = std::make_shared<ml::ReLULayer>();
-  h1 = std::make_shared<ml::LinearLayer>(128, 128);
-  r2 = std::make_shared<ml::ReLULayer>();
-  output = std::make_shared<ml::LinearLayer>(128, 16);
+  q_net.add_layer(std::make_shared<ml::LinearLayer>(32, 128));
+  q_net.add_layer(std::make_shared<ml::ReLULayer>());
+  q_net.add_layer(std::make_shared<ml::LinearLayer>(128, 128));
+  q_net.add_layer(std::make_shared<ml::ReLULayer>());
+  q_net.add_layer(std::make_shared<ml::LinearLayer>(128, 16));
 
   ml::Sequential target_net;
-  target_net.add_layer(input);
-  target_net.add_layer(r1);
-  target_net.add_layer(h1);
-  target_net.add_layer(r2);
-  target_net.add_layer(output);
+  target_net.add_layer(std::make_shared<ml::LinearLayer>(32, 128));
+  target_net.add_layer(std::make_shared<ml::ReLULayer>());
+  target_net.add_layer(std::make_shared<ml::LinearLayer>(128, 128));
+  target_net.add_layer(std::make_shared<ml::ReLULayer>());
+  target_net.add_layer(std::make_shared<ml::LinearLayer>(128, 16));
 
   Config config;
   config.board_size = board_size;
@@ -649,16 +619,19 @@ int main()
     // AI vs Human
     for (size_t i = 0; i < num_games; ++i)
     {
-      int winner;
+      int winner = 0;
       if (choice == 1)
       {
-        LOG("REACH");
         winner = play(config.model_path, config.board_size, false, config.q_net, config.target_net);
       }
       else if (choice == 2)
       {
-        LOG("REACH");
         winner = play_reinforce(config.model_path, config.board_size, false, config.q_net);
+      }
+      else
+      {
+        std::cerr << "Choose agent type 1 (DQN) or 2 (REINFORCE) before this mode.\n";
+        return 1;
       }
       if (winner == 1)
         agent_wins++;
@@ -678,7 +651,7 @@ int main()
     // AI vs Random
     for (size_t i = 0; i < num_games; ++i)
     {
-      int winner;
+      int winner = 0;
       if (choice == 1)
       {
         winner = play(config.model_path, config.board_size, true, config.q_net, config.target_net);
@@ -686,6 +659,11 @@ int main()
       else if (choice == 2)
       {
         winner = play_reinforce(config.model_path, config.board_size, true, config.q_net);
+      }
+      else
+      {
+        std::cerr << "Choose agent type 1 (DQN) or 2 (REINFORCE) before this mode.\n";
+        return 1;
       }
       if (winner == 1)
         agent_wins++;
@@ -718,7 +696,7 @@ int main()
     const int quick_random_games = 10000;
     for (size_t i = 0; i < quick_random_games; ++i)
     {
-      int winner;
+      int winner = 0;
       if (choice == 1)
       {
         winner = play(config.model_path, config.board_size, true, config.q_net, config.target_net, true);
@@ -726,6 +704,11 @@ int main()
       else if (choice == 2)
       {
         winner = play_reinforce(config.model_path, config.board_size, true, config.q_net, true);
+      }
+      else
+      {
+        std::cerr << "Choose agent type 1 (DQN) or 2 (REINFORCE) before this mode.\n";
+        return 1;
       }
       if (winner == 1)
         agent_wins++;

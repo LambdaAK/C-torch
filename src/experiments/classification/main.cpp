@@ -426,8 +426,6 @@ int main()
     nn_model.add_layer(std::make_shared<ml::LinearLayer>(32, 3));
     ml::NN_SGD optimizer(nn_model.parameters(), 0.01, 64);
 
-    LOG("REACH1");
-
     for (size_t i = 0; i < 1000; ++i)
     {
         optimizer.zero_grad();
@@ -441,8 +439,6 @@ int main()
         }
         optimizer.step();
     }
-
-    LOG("REACH2");
 
     float num_correct = 0.0f;
 
