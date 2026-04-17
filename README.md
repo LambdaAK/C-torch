@@ -1,87 +1,194 @@
-# CS-4701-Project
+# C-torch
 
-# Project architecture
+A from-scratch C++ machine learning project.  
+The repository contains:
 
-Three main folders
-1. Math - Mathematical foundations
-    - Matrix class
-    - Matrix operations
-        - Addition, subtraction, scalar multiplication, matrix multiplication
-    - Eigenvalue algorithms
-        - QR algorithm for computing eigenvalues
-    - Matrix factorizations
-        - SVD
-    - Language for mathmatical expressions
-        - AST
-        - Lexer/Parser
-        - Evaluator
-    - Numerical differentiation
-2. ML
-    - Optimization
-        - Minimizing loss functions expressed in the language
-    - Clustering
-        - K-Means
-        - DBSCAN
-    - Supervised learning
-        - K-NN
-        - Perceptron/SVM
-        - Linear regression
-        - Logistic regression
-    - Feature engineering
-        - PCA
-        - Kernels
-3. Applications
-    - TBD
-    
-# Applications
+- A lightweight math layer (`Matrix`, symbolic AST expressions, numerical optimization helpers)
+- ML algorithms implemented directly in C++
+- End-to-end experiments for classification, recommendation, and reinforcement learning
 
-These are demonstrations that show how our models work. They involve real-world data and showcase the capabilities of the mathematical and machine learning components we've built.
+This codebase is primarily experiment-driven and educational/research oriented.
 
-Each application is self-contained and focuses on a specific use case, providing a clear example of how to apply the library.
+## Table of contents
 
-# Coding style guide
+1. [Repository layout](#repository-layout)
+2. [Implemented components](#implemented-components)
+3. [Requirements](#requirements)
+4. [Build and run](#build-and-run)
+5. [Experiments](#experiments)
+6. [Data and artifacts](#data-and-artifacts)
+7. [Known limitations](#known-limitations)
+8. [Project proposal](#project-proposal)
 
-- For each class, there is a header `.hpp` and implementation `.cpp` file.
-- Practice test-driven development!
+## Repository layout
 
-- Documentation
+```text
+.
+├── README.md
+├── proposal/
+│   ├── Project Proposal.md
+│   └── Project Proposal.pdf
+└── src/
+    ├── math/           # matrix ops, AST, differentiator, optimizers, augmentation
+    ├── ml/             # ML models and utilities
+    └── experiments/
+        ├── classification/
+        ├── recommender/
+        └── ndtictactoe/
+```
 
-  - Every single function and class must be documented with the following:
-  
-    - Description  
-      Briefly explain what the function or class does.
-  
-    - Parameters  
-      List each parameter, including:  
-      - Name  
-      - Type  
-      - Description (expected values, units, constraints)
-  
-    - Return Value  
-      Explain what the function returns, including the type and meaning.
-  
-    - Exceptions (if applicable)  
-      Describe any exceptions that can be thrown and under what conditions.
-  
-    - Examples  
-      Provide a minimal, clear example showing how to use the function or class.
-  
-    - Complexity (optional but recommended)  
-      State the time and space complexity.
-  
-    - Notes (optional)  
-      Mention special implementation details, warnings, or anything important to know.
-  
-  - All documentation must use Doxygen-style comments to support auto-generation of docs.
-  
-  - Public methods and classes must be fully documented.  
-  - Private methods should be documented if their behavior is obvious from their signature.
+## Implemented components
 
+### `src/math`
 
-# Proposal
+- `matrix.*`
+  - Dense matrix class
+  - Element access, transpose
+  - Arithmetic (`+`, `-`, scalar `*`, matrix `*`)
+  - Vector distance and inner product
+  - Activation helpers (`relu`, `sigmoid`, `tanh`) and derivatives
+  - Column utilities (`l2_norm_cols`, `center_cols`)
+- `ast.hpp`
+  - Symbolic expression tree (`Num`, `Var`, arithmetic ops, `exp`, `log`, `sqrt`, `abs`, `max`, `min`, `sigmoid` helper)
+  - Simplification and substitution
+- `optim.hpp`
+  - Numerical differentiation
+  - Gradient Descent and SGD wrappers over AST-defined losses
+- `dataaugmentor.*`
+  - Feature expansion (`poly_2` to `poly_5`)
+  - Random Fourier feature projection
 
-Our proposal is found in `/proposal`.
+### `src/ml`
 
-# Compiling and running code
+- Supervised:
+  - Perceptron (`perceptron.*`)
+  - Linear SVM (`svm.*`)
+  - Kernel SVM (`kernelsvm.*`)
+  - Random Fourier SVM (`randomfouriersvm.*`)
+  - Logistic Regression (`logisticregression.*`)
+  - Linear Regression (`linearregression.*`)
+  - KNN (`knn.*`)
+- Unsupervised / DR:
+  - KMeans (`kmeans.*`)
+  - PCA via QR iteration (`pca.*`)
+- Reinforcement / bandits:
+  - Epsilon-greedy MAB (`mab.*`)
+  - UCB (`ucb.*`)
+- Neural network primitives:
+  - `Sequential`, `LinearLayer`, `ReLULayer`, `SigmoidLayer`, `TanhLayer`
+  - SGD optimizer and simple model save/load (`nn.*`)
 
-There is a `Makefile` in each subdirectory of `src/experiments` for compiling the experiment code.
+## Requirements
+
+### Core
+
+- C++17+ compiler (`g++` used by provided Makefiles)
+- `make`
+
+### Recommender experiment extras
+
+- `libcurl`
+- Python 3.11 development headers/libs
+- NumPy include path available to Python
+- `matplotlibcpp.h` is vendored, but `nlohmann/json` single-header include path is expected by the Makefile/code (`json/single_include/...`)
+
+### Notes
+
+- The project is Linux/macOS oriented (system calls such as `open`/`xdg-open` are used in places).
+- Paths are mostly relative to each experiment directory.
+
+## Build and run
+
+Each experiment has its own Makefile.
+
+### 1) Classification (Iris)
+
+```bash
+cd src/experiments/classification
+make
+./main
+```
+
+### 2) Recommender (KMeans + PCA + MAB/UCB)
+
+```bash
+cd src/experiments/recommender
+make
+./main
+```
+
+### 3) N-dimensional Tic-Tac-Toe RL (DQN/REINFORCE)
+
+```bash
+cd src/experiments/ndtictactoe
+make
+./tictactoe
+```
+
+There is also an alternate RL driver:
+
+```bash
+cd src/experiments/ndtictactoe
+g++ -std=c++20 -O3 ttt_main.cpp tictactoe.cpp replaymemory.cpp dqn.cpp sample.cpp ../../math/matrix.cpp ../../ml/nn.cpp -o ttt_main
+./ttt_main
+```
+
+## Experiments
+
+### Classification (`src/experiments/classification`)
+
+- Loads `Iris.csv`
+- Performs train/test split and feature normalization
+- Runs:
+  - Linear SVM
+  - Perceptron
+  - KNN
+  - Linear regression scoring variant
+  - Feedforward NN classifier
+
+### Recommender (`src/experiments/recommender`)
+
+- Loads `processed_data.csv`
+- Uses selected audio features to:
+  - Optionally reduce dimension with PCA
+  - Cluster tracks with KMeans
+  - Treat clusters as arms for MAB/UCB
+- Simulated reward is based on cosine similarity to a user preference vector
+- Writes experiment metrics to JSON result files
+- Includes optional Spotify track/image lookup utilities (requires auth token handling in code)
+
+### N-D Tic-Tac-Toe RL (`src/experiments/ndtictactoe`)
+
+- Environment supports variable board size (`N x N`)
+- Agents:
+  - DQN with replay memory + target network
+  - REINFORCE with optional critic/baseline behavior
+- Supports:
+  - Training
+  - AI vs human
+  - AI vs random policy
+  - Hyperparameter sweep workflows (via `ttt_main.cpp`)
+
+## Data and artifacts
+
+This repository currently contains large generated artifacts (especially RL model checkpoints):
+
+- Most disk usage is under `src/experiments/ndtictactoe/models-and-data`
+- Recommender also includes large CSV datasets and many JSON outputs
+
+If you want a lightweight dev version, consider pruning `.model` files and old experiment outputs before cloning/sharing.
+
+## Known limitations
+
+- Some planned features in comments/proposal are partial or not productionized.
+- `src/math/token.hpp` lexer/parser scaffolding is incomplete.
+- Several scripts/flows assume local environment details (Python version, headers, OS commands).
+- Minimal automated test coverage is included in-repo.
+- Documentation quality is uneven across source files.
+
+## Project proposal
+
+The original project proposal is in:
+
+- [`proposal/Project Proposal.md`](proposal/Project%20Proposal.md)
+- [`proposal/Project Proposal.pdf`](proposal/Project%20Proposal.pdf)

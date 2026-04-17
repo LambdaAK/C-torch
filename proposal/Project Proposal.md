@@ -2,7 +2,7 @@
 
 **Authors: Alex Kozik (ajk333), Nick Brenner (nlb74), Kevin Weng Jr. (kw444)**
 
-**Course: CS 4701 - Spring 2025**
+**Term: Spring 2025**
 
 # AI Keywords
 
