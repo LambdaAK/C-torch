@@ -1073,5 +1073,80 @@ CTorchMatrix* ctorch_pca_compute_projection(
     }, nullptr);
 }
 
+CTorchMAB* ctorch_mab_create(int n_arms, float eps)
+{
+    return run_api<CTorchMAB*>([&]() -> CTorchMAB* {
+        auto handle = std::make_unique<CTorchMAB>();
+        handle->value = std::make_unique<ml::MAB>(n_arms, eps);
+        return handle.release();
+    }, nullptr);
+}
+
+void ctorch_mab_destroy(CTorchMAB* model)
+{
+    delete model;
+}
+
+bool ctorch_mab_select_arm(CTorchMAB* model, int* out_arm)
+{
+    return run_api<bool>([&]() -> bool {
+        if (out_arm == nullptr)
+        {
+            throw std::invalid_argument("out_arm pointer is null");
+        }
+        *out_arm = as_mab_mut(model).select_arms();
+        return true;
+    }, false);
+}
+
+bool ctorch_mab_update(CTorchMAB* model, int arm, double reward)
+{
+    return run_api<bool>([&]() -> bool {
+        as_mab_mut(model).update(arm, reward);
+        return true;
+    }, false);
+}
+
+bool ctorch_mab_set_epsilon(CTorchMAB* model, float eps)
+{
+    return run_api<bool>([&]() -> bool {
+        as_mab_mut(model).set_epsilon(eps);
+        return true;
+    }, false);
+}
+
+CTorchUCB* ctorch_ucb_create(int n_arms)
+{
+    return run_api<CTorchUCB*>([&]() -> CTorchUCB* {
+        auto handle = std::make_unique<CTorchUCB>();
+        handle->value = std::make_unique<ml::UCB>(n_arms);
+        return handle.release();
+    }, nullptr);
+}
+
+void ctorch_ucb_destroy(CTorchUCB* model)
+{
+    delete model;
+}
+
+bool ctorch_ucb_select_arm(CTorchUCB* model, int* out_arm)
+{
+    return run_api<bool>([&]() -> bool {
+        if (out_arm == nullptr)
+        {
+            throw std::invalid_argument("out_arm pointer is null");
+        }
+        *out_arm = as_ucb_mut(model).select_arms();
+        return true;
+    }, false);
+}
+
+bool ctorch_ucb_update(CTorchUCB* model, int arm, double reward)
+{
+    return run_api<bool>([&]() -> bool {
+        as_ucb_mut(model).update(arm, reward);
+        return true;
+    }, false);
+}
 
 } // extern "C"

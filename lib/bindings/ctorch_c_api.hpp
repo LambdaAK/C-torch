@@ -250,6 +250,17 @@ CTorchMatrix* ctorch_pca_compute_projection(
     int max_iter,
     double tol);
 
+CTorchMAB* ctorch_mab_create(int n_arms, float eps);
+void ctorch_mab_destroy(CTorchMAB* model);
+bool ctorch_mab_select_arm(CTorchMAB* model, int* out_arm);
+bool ctorch_mab_update(CTorchMAB* model, int arm, double reward);
+bool ctorch_mab_set_epsilon(CTorchMAB* model, float eps);
+
+CTorchUCB* ctorch_ucb_create(int n_arms);
+void ctorch_ucb_destroy(CTorchUCB* model);
+bool ctorch_ucb_select_arm(CTorchUCB* model, int* out_arm);
+bool ctorch_ucb_update(CTorchUCB* model, int arm, double reward);
+
 #ifdef __cplusplus
 } // extern "C"
 #endif

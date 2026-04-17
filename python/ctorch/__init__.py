@@ -18,6 +18,8 @@ __all__ = [
     "GaussianNB",
     "KMeans",
     "PCA",
+    "MAB",
+    "UCB",
     "OptimType",
     "DataAugmentationType",
     "KernelType",
@@ -347,6 +349,27 @@ _lib.ctorch_pca_compute_projection.argtypes = [
     ct.c_double,
 ]
 _lib.ctorch_pca_compute_projection.restype = ct.c_void_p
+
+_lib.ctorch_mab_create.argtypes = [ct.c_int, ct.c_float]
+_lib.ctorch_mab_create.restype = ct.c_void_p
+_lib.ctorch_mab_destroy.argtypes = [ct.c_void_p]
+_lib.ctorch_mab_destroy.restype = None
+_lib.ctorch_mab_select_arm.argtypes = [ct.c_void_p, ct.POINTER(ct.c_int)]
+_lib.ctorch_mab_select_arm.restype = ct.c_bool
+_lib.ctorch_mab_update.argtypes = [ct.c_void_p, ct.c_int, ct.c_double]
+_lib.ctorch_mab_update.restype = ct.c_bool
+_lib.ctorch_mab_set_epsilon.argtypes = [ct.c_void_p, ct.c_float]
+_lib.ctorch_mab_set_epsilon.restype = ct.c_bool
+
+_lib.ctorch_ucb_create.argtypes = [ct.c_int]
+_lib.ctorch_ucb_create.restype = ct.c_void_p
+_lib.ctorch_ucb_destroy.argtypes = [ct.c_void_p]
+_lib.ctorch_ucb_destroy.restype = None
+_lib.ctorch_ucb_select_arm.argtypes = [ct.c_void_p, ct.POINTER(ct.c_int)]
+_lib.ctorch_ucb_select_arm.restype = ct.c_bool
+_lib.ctorch_ucb_update.argtypes = [ct.c_void_p, ct.c_int, ct.c_double]
+_lib.ctorch_ucb_update.restype = ct.c_bool
+
 
 def _last_error() -> str:
     raw = _lib.ctorch_last_error()
@@ -1095,3 +1118,63 @@ class PCA:
             _lib.ctorch_pca_destroy(ptr)
             self._ptr = ct.c_void_p()
 
+
+class MAB:
+    __slots__ = ("_ptr",)
+
+    def __init__(self, n_arms: int, eps: float) -> None:
+        ptr = _lib.ctorch_mab_create(int(n_arms), float(eps))
+        if not ptr:
+            raise _raise_last_error("MAB(...) failed")
+        self._ptr = ct.c_void_p(ptr)
+
+    def select_arm(self) -> int:
+        out = ct.c_int()
+        ok = _lib.ctorch_mab_select_arm(self._ptr, ct.byref(out))
+        if not ok:
+            raise _raise_last_error("MAB.select_arm failed")
+        return int(out.value)
+
+    def update(self, arm: int, reward: float) -> None:
+        ok = _lib.ctorch_mab_update(self._ptr, int(arm), float(reward))
+        if not ok:
+            raise _raise_last_error("MAB.update failed")
+
+    def set_epsilon(self, eps: float) -> None:
+        ok = _lib.ctorch_mab_set_epsilon(self._ptr, float(eps))
+        if not ok:
+            raise _raise_last_error("MAB.set_epsilon failed")
+
+    def __del__(self) -> None:
+        ptr = getattr(self, "_ptr", None)
+        if ptr:
+            _lib.ctorch_mab_destroy(ptr)
+            self._ptr = ct.c_void_p()
+
+
+class UCB:
+    __slots__ = ("_ptr",)
+
+    def __init__(self, n_arms: int) -> None:
+        ptr = _lib.ctorch_ucb_create(int(n_arms))
+        if not ptr:
+            raise _raise_last_error("UCB(...) failed")
+        self._ptr = ct.c_void_p(ptr)
+
+    def select_arm(self) -> int:
+        out = ct.c_int()
+        ok = _lib.ctorch_ucb_select_arm(self._ptr, ct.byref(out))
+        if not ok:
+            raise _raise_last_error("UCB.select_arm failed")
+        return int(out.value)
+
+    def update(self, arm: int, reward: float) -> None:
+        ok = _lib.ctorch_ucb_update(self._ptr, int(arm), float(reward))
+        if not ok:
+            raise _raise_last_error("UCB.update failed")
+
+    def __del__(self) -> None:
+        ptr = getattr(self, "_ptr", None)
+        if ptr:
+            _lib.ctorch_ucb_destroy(ptr)
+            self._ptr = ct.c_void_p()
