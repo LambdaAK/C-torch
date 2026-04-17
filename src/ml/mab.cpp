@@ -3,7 +3,7 @@
 namespace ml
 {
 
-  MAB::MAB(int n_arms, float eps) : n_arms(n_arms), eps(eps), counts(n_arms, 0), values(n_arms, 0) {}
+  MAB::MAB(int n_arms, float eps) : n_arms(n_arms), eps(eps), counts(n_arms, 0), values(n_arms, 0.0) {}
 
   int MAB::select_arms()
   {
@@ -27,11 +27,11 @@ namespace ml
     }
   }
 
-  void MAB::update(int arm, int reward)
+  void MAB::update(int arm, double reward)
   {
     counts[arm] += 1;
-    int n = counts[arm];
-    values[arm] = ((n_arms - 1) * values[arm] + reward) / n_arms;
+    const double n = static_cast<double>(counts[arm]);
+    values[arm] += (reward - values[arm]) / n;
   }
 
   void MAB::set_epsilon(float eps)

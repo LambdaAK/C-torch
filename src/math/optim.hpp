@@ -254,7 +254,7 @@ namespace math
                 std::vector<int> indices;
                 for (int j = 0; j < batch_size; j++)
                 {
-                    int index = rand() % xTr.numCols();
+                    int index = rand() % xTr.numRows();
                     indices.push_back(index);
                 }
                 // compute the loss function for this epoch

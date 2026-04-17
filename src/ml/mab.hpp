@@ -13,14 +13,14 @@ namespace ml
         int n_arms;
         float eps;
         std::vector<int> counts;
-        std::vector<int> values;
+        std::vector<double> values;
 
     public:
         MAB(int n_arms, float eps);
         // arms are zero-indexed
         int select_arms();
         // arm should be zero-indexed
-        void update(int arm, int reward);
+        void update(int arm, double reward);
         void set_epsilon(float eps);
     };
 };

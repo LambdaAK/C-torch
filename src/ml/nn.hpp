@@ -80,6 +80,8 @@ namespace ml {
       // Must have called backward first
       std::vector<std::pair<std::shared_ptr<Matrix>, std::shared_ptr<Matrix>>> parameters();
 
+      bool copy_parameters_from(const Sequential& other);
+
       bool save(const std::string& filepath);
 
       bool load(const std::string& filepath);

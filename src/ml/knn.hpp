@@ -18,7 +18,7 @@ namespace ml
         // Constructor
         KNN(size_t k, Matrix xTr, Matrix yTr);
         // Predict the label of a test sample
-        int predict(Matrix x) const;
+        int predict(const Matrix &x) const;
         // Compute the accuracy of a model over some test set of samples
         double score(const Matrix &xTe, const Matrix &yTe);
         // return k

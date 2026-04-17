@@ -508,7 +508,7 @@ Config make_config2(std::string model_path)
   r1 = std::make_shared<ml::ReLULayer>();
   h1 = std::make_shared<ml::LinearLayer>(128, 64);
   r2 = std::make_shared<ml::ReLULayer>();
-  output = std::make_shared<ml::LinearLayer>(64, 1);
+  output = std::make_shared<ml::LinearLayer>(64, 9);
 
   ml::Sequential target_net;
   target_net.add_layer(input);

@@ -144,4 +144,5 @@ Matrix DataAugmentor::augment_data(const Matrix &x, DataAugmentationType augment
         return random_fourier_features(x, 100, 0.75);
     }
 
+    throw std::invalid_argument("Unknown DataAugmentationType");
 }

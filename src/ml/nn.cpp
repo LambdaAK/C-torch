@@ -104,6 +104,35 @@ namespace ml {
         return params;
     }
 
+    bool Sequential::copy_parameters_from(const Sequential& other) {
+        if (layers.size() != other.layers.size()) {
+            return false;
+        }
+
+        for (size_t i = 0; i < layers.size(); ++i) {
+            auto* this_linear = dynamic_cast<LinearLayer*>(layers[i].get());
+            auto* other_linear = dynamic_cast<LinearLayer*>(other.layers[i].get());
+
+            if ((this_linear == nullptr) != (other_linear == nullptr)) {
+                return false;
+            }
+
+            if (this_linear && other_linear) {
+                if (this_linear->get_input_dim() != other_linear->get_input_dim() ||
+                    this_linear->get_output_dim() != other_linear->get_output_dim()) {
+                    return false;
+                }
+
+                auto [this_w, this_b] = this_linear->get_params();
+                auto [other_w, other_b] = other_linear->get_params();
+                *this_w = *other_w;
+                *this_b = *other_b;
+            }
+        }
+
+        return true;
+    }
+
     Matrix Sequential::forward(const Matrix& x) {
         // apply each layer in sequence
         std::vector<Matrix> activations;

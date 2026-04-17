@@ -209,7 +209,12 @@ namespace ml
 
         Matrix x_augmented = DataAugmentor::augment_data(x, data_augmentation_type);
 
-        for (size_t i = 0; i < x.numCols(); i++)
+        if (x_augmented.numCols() != weights.numCols())
+        {
+            throw std::invalid_argument("Feature dimension mismatch between input and trained weights.");
+        }
+
+        for (size_t i = 0; i < x_augmented.numCols(); i++)
         {
             result += weights(0, i) * x_augmented.at(0, i);
         }

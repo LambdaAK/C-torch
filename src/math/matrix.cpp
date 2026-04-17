@@ -24,10 +24,7 @@ Matrix::Matrix(std::initializer_list<std::initializer_list<double>> init_list) :
 }
 
 // Default constructor: Creates a 1x1 matrix filled with zero
-Matrix::Matrix()
-{
-    data.resize(1, 0.0);
-}
+Matrix::Matrix() : rows(1), cols(1), data(1, 0.0) {}
 
 // Copy constructor
 Matrix::Matrix(const Matrix &other) = default;
@@ -217,7 +214,7 @@ double Matrix::inner_product(const Matrix &other) const
         throw std::invalid_argument("Dimension mismatch.");
     double result = 0.0;
     // element-wise product
-    for (size_t i = 0; i < rows; ++i)
+    for (size_t i = 0; i < rows * cols; ++i)
         result += data[i] * other.data[i];
 
     return result;

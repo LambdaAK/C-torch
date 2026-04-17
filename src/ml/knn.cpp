@@ -17,7 +17,7 @@ namespace ml
         }
     }
 
-    int KNN::predict(Matrix x) const
+    int KNN::predict(const Matrix &x) const
     {
         // sample is a row vector
         // check that it has the same number of columns as xTr
@@ -34,24 +34,29 @@ namespace ml
 
         // compute the Euclidean distance between the sample and each row in xTr
 
-        std::map<double, int> distances;
+        std::vector<std::pair<double, int>> distances;
+        distances.reserve(xTr.numRows());
 
         for (size_t i = 0; i < xTr.numRows(); ++i)
         {
             double distance = x.euclideanDistance(xTr_rows[i]);
-            distances[distance] = i;
+            distances.push_back({distance, static_cast<int>(i)});
         }
 
         // sort the distances and get the k nearest neighbors
+        std::sort(distances.begin(), distances.end(),
+                  [](const auto &a, const auto &b)
+                  { return a.first < b.first; });
 
         std::vector<int> nearest_neighbors;
 
-        for (const auto &pair : distances)
-        {
-            nearest_neighbors.push_back(pair.second);
-        }
+        const size_t nearest_k = std::min(k, distances.size());
+        nearest_neighbors.reserve(nearest_k);
 
-        nearest_neighbors.resize(k); // keep only the k nearest neighbors
+        for (size_t i = 0; i < nearest_k; ++i)
+        {
+            nearest_neighbors.push_back(distances[i].second);
+        }
 
         // get the labels of the k nearest neighbors
 

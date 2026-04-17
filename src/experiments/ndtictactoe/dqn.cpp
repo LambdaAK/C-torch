@@ -1,4 +1,7 @@
 #include "dqn.hpp"
+
+#include <limits>
+#include <stdexcept>
   
 DQNAgent::DQNAgent(ml::Sequential q_net, ml::Sequential target_net, float start, float end, float decay, float gamma, 
     float lr, size_t batch_size, size_t memory_capacity, int update_freq)
@@ -7,10 +10,19 @@ DQNAgent::DQNAgent(ml::Sequential q_net, ml::Sequential target_net, float start,
       update_frequency(update_freq), steps(0) {
   
   optimizer = ml::NN_SGD(q_network.parameters(), lr, batch_size);
+  if (!target_network.copy_parameters_from(q_network))
+  {
+    throw std::runtime_error("Failed to initialize target network from Q-network.");
+  }
 }
 
 int DQNAgent::act(const std::vector<float> &state, const std::vector<int> &valid_actions)
 {
+  if (valid_actions.empty())
+  {
+    throw std::invalid_argument("DQNAgent::act called with no valid actions.");
+  }
+
   std::random_device rd;
   std::mt19937 gen(rd());
   std::uniform_real_distribution<> dis(0.0, 1.0);
@@ -25,27 +37,23 @@ int DQNAgent::act(const std::vector<float> &state, const std::vector<int> &valid
   {
     // exploitation: select action with highest Q-value
     Matrix pred_q = q_network.forward(convert_input(state));
-    float max_elt = pred_q(0, 0);
-    size_t max_index = 0;
-    for (size_t i = 0; i < pred_q.numRows(); ++i)
+    float max_elt = std::numeric_limits<float>::lowest();
+    action = valid_actions[0];
+    for (int idx : valid_actions)
     {
-      if (pred_q(i, 0) > max_elt)
+      if (pred_q(idx, 0) > max_elt)
       {
-        max_elt = pred_q(i, 0);
-        max_index = i;
+        max_elt = pred_q(idx, 0);
+        action = idx;
       }
     }
-    action = max_index;
   }
 
   // make sure the selected action is valid
-  if (epsilon == 0.0f)
+  if (std::find(valid_actions.begin(), valid_actions.end(), action) == valid_actions.end())
   {
-    if (std::find(valid_actions.begin(), valid_actions.end(), action) == valid_actions.end())
-    {
-      std::uniform_int_distribution<> dis(0, valid_actions.size() - 1);
-      action = valid_actions[dis(gen)];
-    }
+    std::uniform_int_distribution<> action_dis(0, valid_actions.size() - 1);
+    action = valid_actions[action_dis(gen)];
   }
 
   return action;
@@ -99,7 +107,10 @@ void DQNAgent::update_networks(size_t batch_size)
   steps++;
   if (steps % update_frequency == 0)
   {
-    target_network = q_network;
+    if (!target_network.copy_parameters_from(q_network))
+    {
+      throw std::runtime_error("Failed to copy Q-network parameters to target network.");
+    }
   }
 }
 

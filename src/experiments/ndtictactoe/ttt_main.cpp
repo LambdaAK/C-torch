@@ -127,7 +127,9 @@ DQNAgent create_agent(DQNConfig config, std::string file_path, bool eval_mode, i
 
     validate_config(config);
 
-    DQNAgent agent(q_net, target_net, std::stof(config.epsilon_start), std::stof(config.epsilon_end), std::stof(config.epsilon_decay), std::stof(config.gamma), std::stof(config.learning_rate), std::stoi(config.batch_size));
+    DQNAgent agent(q_net, target_net, std::stof(config.epsilon_start), std::stof(config.epsilon_end),
+                   std::stof(config.epsilon_decay), std::stof(config.gamma), std::stof(config.learning_rate),
+                   std::stoi(config.batch_size), 10000, std::stoi(config.update_frequency));
     agent.load(file_path);
     if (eval_mode) {
         agent.set_epsilon(0.0f);
@@ -139,11 +141,13 @@ DQNAgent train_agent(DQNConfig config, std::function<std::string(DQNConfig)> get
     ml::Sequential q_net = config.create_network();
     ml::Sequential target_net = config.create_network();
 
-    int batch_size = 64;
+    int batch_size = std::stoi(config.batch_size);
 
     validate_config(config);
 
-    DQNAgent agent(q_net, target_net, std::stof(config.epsilon_start), std::stof(config.epsilon_end), std::stof(config.epsilon_decay), std::stof(config.gamma), std::stof(config.learning_rate), std::stoi(config.batch_size));
+    DQNAgent agent(q_net, target_net, std::stof(config.epsilon_start), std::stof(config.epsilon_end),
+                   std::stof(config.epsilon_decay), std::stof(config.gamma), std::stof(config.learning_rate),
+                   std::stoi(config.batch_size), 10000, std::stoi(config.update_frequency));
     
     TicTacToe env(board_dim);
 
@@ -609,7 +613,7 @@ void run_experiment(ExperimentConfig experiment_config) {
     // evaluate the models and output the performance results to a CSV files
     for (DQNConfig config : experiment_config.configs) {
         std::vector<std::string> model_files = get_model_files(experiment_config.experiment_name + "/" + experiment_config.get_folder_name(config));
-        std::map<int, std::vector<int>> results = test_all_models_for_epsilon_decay(config, model_files, config.board_dimension);
+        std::map<int, std::vector<int>> results = test_all_models_for_epsilon_decay(config, model_files, experiment_config.board_dim);
         save_results_to_csv(results, experiment_config.experiment_name + "/" + experiment_config.get_folder_name(config) + "_results.csv");
     }
     

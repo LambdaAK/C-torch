@@ -801,9 +801,9 @@ int main()
             deque_ref.pop_front();
         }
 
-        int choice = compute_reward(user_vec, {xTr(rec_index, 0), xTr(rec_index, 1), xTr(rec_index, 2),
-                                               xTr(rec_index, 3), xTr(rec_index, 4), xTr(rec_index, 5),
-                                               xTr(rec_index, 6)});
+        double choice = compute_reward(user_vec, {xTr(rec_index, 0), xTr(rec_index, 1), xTr(rec_index, 2),
+                                                  xTr(rec_index, 3), xTr(rec_index, 4), xTr(rec_index, 5),
+                                                  xTr(rec_index, 6)});
 
         total_reward += choice;
         total_rewards.push_back(total_reward);
