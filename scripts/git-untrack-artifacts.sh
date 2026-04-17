@@ -13,7 +13,7 @@ fi
 
 git rm -r --cached experiments/ndtictactoe/models-and-data 2>/dev/null || true
 
-git ls-files -- '*.model' | while IFS= read -r f; do
+git ls-files -- '*.model' '*_results.csv' '*_results.json' '*metrics*.csv' '*metrics*.json' | while IFS= read -r f; do
   [ -z "$f" ] && continue
   git rm --cached --ignore-unmatch "$f" || true
 done

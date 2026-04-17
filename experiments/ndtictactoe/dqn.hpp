@@ -8,17 +8,22 @@
 #include <memory>
 #include <deque>
 #include <cmath>
+#include <string>
 
 #include "replaymemory.hpp"
 #include "math/matrix.hpp"
 #include "ml/nn.hpp"
+#include "ml/nn_optim.hpp"
+
+std::string dqn_optimizer_to_string(ml::NNOptimType optimizer_type);
+ml::NNOptimType dqn_optimizer_from_string(const std::string &optimizer_name);
 
 class DQNAgent
 {
 private:
   ml::Sequential q_network;      // The main network that makes the Q-value predictions
   ml::Sequential target_network; // The target network that is used to compute the target Q-values
-  ml::NN_SGD optimizer;          // Neural network SGD optimizer for training q_network and target_network
+  ml::NNOptimizer optimizer;     // Neural network optimizer for training q_network and target_network
   ReplayMemory memory;           // The replay memory that stores the experiences of the agent
   float epsilon;                 // The exploration rate
   float start;                   // The starting exploration rate
@@ -43,10 +48,12 @@ public:
    * @param batch_size Batch size for training
    * @param memory_capacity Capacity of replay memory
    * @param update_freq Frequency of target network updates
+   * @param optimizer_type Optimizer used to train q_network
    */
   DQNAgent(ml::Sequential q_net, ml::Sequential target_net, float start = 0.99f, float end = 0.1f,
            float decay = 0.99995f, float gamma = 0.9f, float lr = 0.001f, size_t batch_size = 64,
-           size_t memory_capacity = 10000, int update_freq = 200);
+           size_t memory_capacity = 10000, int update_freq = 200,
+           ml::NNOptimType optimizer_type = ml::NNOptimType::SGD);
 
   /**
    * Selects an action for the agent to take based on the current state.

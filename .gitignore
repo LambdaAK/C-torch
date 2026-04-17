@@ -32,5 +32,14 @@ __pycache__/
 # RL sweep/checkpoint trees (keep local only; use scripts/git-untrack-artifacts.sh if already committed)
 experiments/ndtictactoe/models-and-data/
 
-# Optional: ignore bulky recommender outputs (uncomment if you do not track these)
-# experiments/recommender/**/*.json
+# Generated run output directories
+experiments/**/runs/
+experiments/**/run_outputs/
+experiments/**/checkpoints/
+artifacts/runs/
+
+# Generated metrics/result files
+experiments/**/*_results.csv
+experiments/**/*_results.json
+experiments/**/metrics*.csv
+experiments/**/metrics*.json
