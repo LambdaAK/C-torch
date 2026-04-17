@@ -816,5 +816,262 @@ bool ctorch_svm_score(
     }, false);
 }
 
+CTorchKernelSVM* ctorch_kernel_svm_create(
+    const CTorchMatrix* x_train,
+    const CTorchMatrix* y_train,
+    double learning_rate,
+    int max_iter,
+    double c_value,
+    CTorchKernelType kernel_type,
+    double gamma)
+{
+    return run_api<CTorchKernelSVM*>([&]() -> CTorchKernelSVM* {
+        auto handle = std::make_unique<CTorchKernelSVM>();
+        handle->value = std::make_unique<ml::KernelSVM>(
+            as_matrix_ref(x_train),
+            as_matrix_ref(y_train),
+            learning_rate,
+            max_iter,
+            c_value,
+            as_kernel_options(kernel_type, gamma));
+        return handle.release();
+    }, nullptr);
+}
+
+void ctorch_kernel_svm_destroy(CTorchKernelSVM* model)
+{
+    delete model;
+}
+
+bool ctorch_kernel_svm_predict(
+    const CTorchKernelSVM* model,
+    const CTorchMatrix* sample,
+    int* out_label)
+{
+    return run_api<bool>([&]() -> bool {
+        if (out_label == nullptr)
+        {
+            throw std::invalid_argument("out_label pointer is null");
+        }
+        *out_label = as_kernel_svm_ref(model).predict(as_matrix_ref(sample));
+        return true;
+    }, false);
+}
+
+bool ctorch_kernel_svm_score(
+    const CTorchKernelSVM* model,
+    const CTorchMatrix* x_test,
+    const CTorchMatrix* y_test,
+    double* out_score)
+{
+    return run_api<bool>([&]() -> bool {
+        if (out_score == nullptr)
+        {
+            throw std::invalid_argument("out_score pointer is null");
+        }
+        *out_score = as_kernel_svm_ref(model).score(
+            as_matrix_ref(x_test),
+            as_matrix_ref(y_test));
+        return true;
+    }, false);
+}
+
+CTorchRandomFourierSVM* ctorch_random_fourier_svm_create(
+    const CTorchMatrix* x_train,
+    const CTorchMatrix* y_train,
+    int d_features,
+    double gamma,
+    double learning_rate,
+    int max_iter,
+    double c_value)
+{
+    return run_api<CTorchRandomFourierSVM*>([&]() -> CTorchRandomFourierSVM* {
+        auto handle = std::make_unique<CTorchRandomFourierSVM>();
+        handle->value = std::make_unique<ml::RandomFourierSVM>(
+            as_matrix_ref(x_train),
+            as_matrix_ref(y_train),
+            d_features,
+            gamma,
+            learning_rate,
+            max_iter,
+            c_value);
+        return handle.release();
+    }, nullptr);
+}
+
+void ctorch_random_fourier_svm_destroy(CTorchRandomFourierSVM* model)
+{
+    delete model;
+}
+
+bool ctorch_random_fourier_svm_predict(
+    const CTorchRandomFourierSVM* model,
+    const CTorchMatrix* sample,
+    int* out_label)
+{
+    return run_api<bool>([&]() -> bool {
+        if (out_label == nullptr)
+        {
+            throw std::invalid_argument("out_label pointer is null");
+        }
+        *out_label = as_random_fourier_svm_ref(model).predict(as_matrix_ref(sample));
+        return true;
+    }, false);
+}
+
+bool ctorch_random_fourier_svm_score(
+    const CTorchRandomFourierSVM* model,
+    const CTorchMatrix* x_test,
+    const CTorchMatrix* y_test,
+    double* out_score)
+{
+    return run_api<bool>([&]() -> bool {
+        if (out_score == nullptr)
+        {
+            throw std::invalid_argument("out_score pointer is null");
+        }
+        *out_score = as_random_fourier_svm_ref(model).score(
+            as_matrix_ref(x_test),
+            as_matrix_ref(y_test));
+        return true;
+    }, false);
+}
+
+CTorchGaussianNB* ctorch_gaussian_nb_create(
+    const CTorchMatrix* x_train,
+    const CTorchMatrix* y_train)
+{
+    return run_api<CTorchGaussianNB*>([&]() -> CTorchGaussianNB* {
+        auto handle = std::make_unique<CTorchGaussianNB>();
+        handle->value = std::make_unique<ml::GaussianNB>(
+            as_matrix_ref(x_train),
+            as_matrix_ref(y_train));
+        return handle.release();
+    }, nullptr);
+}
+
+void ctorch_gaussian_nb_destroy(CTorchGaussianNB* model)
+{
+    delete model;
+}
+
+bool ctorch_gaussian_nb_predict(
+    const CTorchGaussianNB* model,
+    const CTorchMatrix* sample,
+    int* out_label)
+{
+    return run_api<bool>([&]() -> bool {
+        if (out_label == nullptr)
+        {
+            throw std::invalid_argument("out_label pointer is null");
+        }
+        *out_label = as_gaussian_nb_ref(model).predict(as_matrix_ref(sample));
+        return true;
+    }, false);
+}
+
+bool ctorch_gaussian_nb_score(
+    CTorchGaussianNB* model,
+    const CTorchMatrix* x_test,
+    const CTorchMatrix* y_test,
+    double* out_score)
+{
+    return run_api<bool>([&]() -> bool {
+        if (out_score == nullptr)
+        {
+            throw std::invalid_argument("out_score pointer is null");
+        }
+        *out_score = as_gaussian_nb_mut(model).score(
+            as_matrix_ref(x_test),
+            as_matrix_ref(y_test));
+        return true;
+    }, false);
+}
+
+CTorchKMeans* ctorch_kmeans_create(
+    int k,
+    const CTorchMatrix* x_train,
+    int max_iter)
+{
+    return run_api<CTorchKMeans*>([&]() -> CTorchKMeans* {
+        auto handle = std::make_unique<CTorchKMeans>();
+        handle->value = std::make_unique<ml::KMeans>(
+            k,
+            as_matrix_ref(x_train),
+            max_iter);
+        return handle.release();
+    }, nullptr);
+}
+
+void ctorch_kmeans_destroy(CTorchKMeans* model)
+{
+    delete model;
+}
+
+bool ctorch_kmeans_assignment_count(
+    const CTorchKMeans* model,
+    size_t* out_count)
+{
+    return run_api<bool>([&]() -> bool {
+        if (out_count == nullptr)
+        {
+            throw std::invalid_argument("out_count pointer is null");
+        }
+        const std::vector<int> assignments = as_kmeans_ref(model).getAssignments();
+        *out_count = assignments.size();
+        return true;
+    }, false);
+}
+
+bool ctorch_kmeans_get_assignments(
+    const CTorchKMeans* model,
+    int* out_assignments,
+    size_t out_count)
+{
+    return run_api<bool>([&]() -> bool {
+        const std::vector<int> assignments = as_kmeans_ref(model).getAssignments();
+        if (out_count != assignments.size())
+        {
+            throw std::invalid_argument("out_count does not match assignment count");
+        }
+        if (out_count > 0 && out_assignments == nullptr)
+        {
+            throw std::invalid_argument("out_assignments pointer is null");
+        }
+        for (size_t i = 0; i < out_count; ++i)
+        {
+            out_assignments[i] = assignments[i];
+        }
+        return true;
+    }, false);
+}
+
+CTorchPCA* ctorch_pca_create(const CTorchMatrix* centered_x)
+{
+    return run_api<CTorchPCA*>([&]() -> CTorchPCA* {
+        auto handle = std::make_unique<CTorchPCA>();
+        handle->value = std::make_unique<ml::PCA>(as_matrix_ref(centered_x));
+        return handle.release();
+    }, nullptr);
+}
+
+void ctorch_pca_destroy(CTorchPCA* model)
+{
+    delete model;
+}
+
+CTorchMatrix* ctorch_pca_compute_projection(
+    CTorchPCA* model,
+    int k,
+    int max_iter,
+    double tol)
+{
+    return run_api<CTorchMatrix*>([&]() -> CTorchMatrix* {
+        auto out = std::make_unique<CTorchMatrix>();
+        out->value = as_pca_mut(model).compute_projection_mat(k, max_iter, static_cast<float>(tol));
+        return out.release();
+    }, nullptr);
+}
+
 
 } // extern "C"

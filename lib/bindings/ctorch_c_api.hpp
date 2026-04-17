@@ -177,6 +177,79 @@ bool ctorch_svm_score(
     const CTorchMatrix* y_test,
     double* out_score);
 
+CTorchKernelSVM* ctorch_kernel_svm_create(
+    const CTorchMatrix* x_train,
+    const CTorchMatrix* y_train,
+    double learning_rate,
+    int max_iter,
+    double c_value,
+    CTorchKernelType kernel_type,
+    double gamma);
+void ctorch_kernel_svm_destroy(CTorchKernelSVM* model);
+bool ctorch_kernel_svm_predict(
+    const CTorchKernelSVM* model,
+    const CTorchMatrix* sample,
+    int* out_label);
+bool ctorch_kernel_svm_score(
+    const CTorchKernelSVM* model,
+    const CTorchMatrix* x_test,
+    const CTorchMatrix* y_test,
+    double* out_score);
+
+CTorchRandomFourierSVM* ctorch_random_fourier_svm_create(
+    const CTorchMatrix* x_train,
+    const CTorchMatrix* y_train,
+    int d_features,
+    double gamma,
+    double learning_rate,
+    int max_iter,
+    double c_value);
+void ctorch_random_fourier_svm_destroy(CTorchRandomFourierSVM* model);
+bool ctorch_random_fourier_svm_predict(
+    const CTorchRandomFourierSVM* model,
+    const CTorchMatrix* sample,
+    int* out_label);
+bool ctorch_random_fourier_svm_score(
+    const CTorchRandomFourierSVM* model,
+    const CTorchMatrix* x_test,
+    const CTorchMatrix* y_test,
+    double* out_score);
+
+CTorchGaussianNB* ctorch_gaussian_nb_create(
+    const CTorchMatrix* x_train,
+    const CTorchMatrix* y_train);
+void ctorch_gaussian_nb_destroy(CTorchGaussianNB* model);
+bool ctorch_gaussian_nb_predict(
+    const CTorchGaussianNB* model,
+    const CTorchMatrix* sample,
+    int* out_label);
+bool ctorch_gaussian_nb_score(
+    CTorchGaussianNB* model,
+    const CTorchMatrix* x_test,
+    const CTorchMatrix* y_test,
+    double* out_score);
+
+CTorchKMeans* ctorch_kmeans_create(
+    int k,
+    const CTorchMatrix* x_train,
+    int max_iter);
+void ctorch_kmeans_destroy(CTorchKMeans* model);
+bool ctorch_kmeans_assignment_count(
+    const CTorchKMeans* model,
+    size_t* out_count);
+bool ctorch_kmeans_get_assignments(
+    const CTorchKMeans* model,
+    int* out_assignments,
+    size_t out_count);
+
+CTorchPCA* ctorch_pca_create(const CTorchMatrix* centered_x);
+void ctorch_pca_destroy(CTorchPCA* model);
+CTorchMatrix* ctorch_pca_compute_projection(
+    CTorchPCA* model,
+    int k,
+    int max_iter,
+    double tol);
+
 #ifdef __cplusplus
 } // extern "C"
 #endif

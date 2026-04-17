@@ -13,8 +13,14 @@ __all__ = [
     "LogisticRegression",
     "Perceptron",
     "SVM",
+    "KernelSVM",
+    "RandomFourierSVM",
+    "GaussianNB",
+    "KMeans",
+    "PCA",
     "OptimType",
     "DataAugmentationType",
+    "KernelType",
 ]
 
 
@@ -246,6 +252,101 @@ _lib.ctorch_svm_score.argtypes = [
     ct.POINTER(ct.c_double),
 ]
 _lib.ctorch_svm_score.restype = ct.c_bool
+
+_lib.ctorch_kernel_svm_create.argtypes = [
+    ct.c_void_p,
+    ct.c_void_p,
+    ct.c_double,
+    ct.c_int,
+    ct.c_double,
+    ct.c_int,
+    ct.c_double,
+]
+_lib.ctorch_kernel_svm_create.restype = ct.c_void_p
+_lib.ctorch_kernel_svm_destroy.argtypes = [ct.c_void_p]
+_lib.ctorch_kernel_svm_destroy.restype = None
+_lib.ctorch_kernel_svm_predict.argtypes = [
+    ct.c_void_p,
+    ct.c_void_p,
+    ct.POINTER(ct.c_int),
+]
+_lib.ctorch_kernel_svm_predict.restype = ct.c_bool
+_lib.ctorch_kernel_svm_score.argtypes = [
+    ct.c_void_p,
+    ct.c_void_p,
+    ct.c_void_p,
+    ct.POINTER(ct.c_double),
+]
+_lib.ctorch_kernel_svm_score.restype = ct.c_bool
+
+_lib.ctorch_random_fourier_svm_create.argtypes = [
+    ct.c_void_p,
+    ct.c_void_p,
+    ct.c_int,
+    ct.c_double,
+    ct.c_double,
+    ct.c_int,
+    ct.c_double,
+]
+_lib.ctorch_random_fourier_svm_create.restype = ct.c_void_p
+_lib.ctorch_random_fourier_svm_destroy.argtypes = [ct.c_void_p]
+_lib.ctorch_random_fourier_svm_destroy.restype = None
+_lib.ctorch_random_fourier_svm_predict.argtypes = [
+    ct.c_void_p,
+    ct.c_void_p,
+    ct.POINTER(ct.c_int),
+]
+_lib.ctorch_random_fourier_svm_predict.restype = ct.c_bool
+_lib.ctorch_random_fourier_svm_score.argtypes = [
+    ct.c_void_p,
+    ct.c_void_p,
+    ct.c_void_p,
+    ct.POINTER(ct.c_double),
+]
+_lib.ctorch_random_fourier_svm_score.restype = ct.c_bool
+
+_lib.ctorch_gaussian_nb_create.argtypes = [ct.c_void_p, ct.c_void_p]
+_lib.ctorch_gaussian_nb_create.restype = ct.c_void_p
+_lib.ctorch_gaussian_nb_destroy.argtypes = [ct.c_void_p]
+_lib.ctorch_gaussian_nb_destroy.restype = None
+_lib.ctorch_gaussian_nb_predict.argtypes = [
+    ct.c_void_p,
+    ct.c_void_p,
+    ct.POINTER(ct.c_int),
+]
+_lib.ctorch_gaussian_nb_predict.restype = ct.c_bool
+_lib.ctorch_gaussian_nb_score.argtypes = [
+    ct.c_void_p,
+    ct.c_void_p,
+    ct.c_void_p,
+    ct.POINTER(ct.c_double),
+]
+_lib.ctorch_gaussian_nb_score.restype = ct.c_bool
+
+_lib.ctorch_kmeans_create.argtypes = [ct.c_int, ct.c_void_p, ct.c_int]
+_lib.ctorch_kmeans_create.restype = ct.c_void_p
+_lib.ctorch_kmeans_destroy.argtypes = [ct.c_void_p]
+_lib.ctorch_kmeans_destroy.restype = None
+_lib.ctorch_kmeans_assignment_count.argtypes = [ct.c_void_p, ct.POINTER(ct.c_size_t)]
+_lib.ctorch_kmeans_assignment_count.restype = ct.c_bool
+_lib.ctorch_kmeans_get_assignments.argtypes = [
+    ct.c_void_p,
+    ct.POINTER(ct.c_int),
+    ct.c_size_t,
+]
+_lib.ctorch_kmeans_get_assignments.restype = ct.c_bool
+
+_lib.ctorch_pca_create.argtypes = [ct.c_void_p]
+_lib.ctorch_pca_create.restype = ct.c_void_p
+_lib.ctorch_pca_destroy.argtypes = [ct.c_void_p]
+_lib.ctorch_pca_destroy.restype = None
+_lib.ctorch_pca_compute_projection.argtypes = [
+    ct.c_void_p,
+    ct.c_int,
+    ct.c_int,
+    ct.c_double,
+]
+_lib.ctorch_pca_compute_projection.restype = ct.c_void_p
 
 def _last_error() -> str:
     raw = _lib.ctorch_last_error()
@@ -763,5 +864,234 @@ class SVM:
         ptr = getattr(self, "_ptr", None)
         if ptr:
             _lib.ctorch_svm_destroy(ptr)
+            self._ptr = ct.c_void_p()
+
+
+class KernelSVM:
+    __slots__ = ("_ptr",)
+
+    def __init__(
+        self,
+        x_train: Matrix | Sequence[object],
+        y_train: Matrix | Sequence[object],
+        learning_rate: float,
+        max_iter: int,
+        c_value: float,
+        kernel: KernelType | int = KernelType.LINEAR,
+        gamma: float = 1.0,
+    ) -> None:
+        x_mat = _coerce_matrix(x_train)
+        y_mat = _coerce_row_vector(y_train)
+        kernel_type = _coerce_enum(kernel, KernelType, "kernel")
+        ptr = _lib.ctorch_kernel_svm_create(
+            x_mat._ptr,
+            y_mat._ptr,
+            float(learning_rate),
+            int(max_iter),
+            float(c_value),
+            int(kernel_type),
+            float(gamma),
+        )
+        if not ptr:
+            raise _raise_last_error("KernelSVM(...) failed")
+        self._ptr = ct.c_void_p(ptr)
+
+    def predict(self, sample: Matrix | Sequence[object]) -> int:
+        sample_mat = _coerce_row_vector(sample)
+        out = ct.c_int()
+        ok = _lib.ctorch_kernel_svm_predict(self._ptr, sample_mat._ptr, ct.byref(out))
+        if not ok:
+            raise _raise_last_error("KernelSVM.predict failed")
+        return int(out.value)
+
+    def score(
+        self,
+        x_test: Matrix | Sequence[object],
+        y_test: Matrix | Sequence[object],
+    ) -> float:
+        x_mat = _coerce_matrix(x_test)
+        y_mat = _coerce_row_vector(y_test)
+        out = ct.c_double()
+        ok = _lib.ctorch_kernel_svm_score(self._ptr, x_mat._ptr, y_mat._ptr, ct.byref(out))
+        if not ok:
+            raise _raise_last_error("KernelSVM.score failed")
+        return float(out.value)
+
+    def __del__(self) -> None:
+        ptr = getattr(self, "_ptr", None)
+        if ptr:
+            _lib.ctorch_kernel_svm_destroy(ptr)
+            self._ptr = ct.c_void_p()
+
+
+class RandomFourierSVM:
+    __slots__ = ("_ptr",)
+
+    def __init__(
+        self,
+        x_train: Matrix | Sequence[object],
+        y_train: Matrix | Sequence[object],
+        d_features: int,
+        gamma: float,
+        learning_rate: float,
+        max_iter: int,
+        c_value: float,
+    ) -> None:
+        x_mat = _coerce_matrix(x_train)
+        y_mat = _coerce_row_vector(y_train)
+        ptr = _lib.ctorch_random_fourier_svm_create(
+            x_mat._ptr,
+            y_mat._ptr,
+            int(d_features),
+            float(gamma),
+            float(learning_rate),
+            int(max_iter),
+            float(c_value),
+        )
+        if not ptr:
+            raise _raise_last_error("RandomFourierSVM(...) failed")
+        self._ptr = ct.c_void_p(ptr)
+
+    def predict(self, sample: Matrix | Sequence[object]) -> int:
+        sample_mat = _coerce_row_vector(sample)
+        out = ct.c_int()
+        ok = _lib.ctorch_random_fourier_svm_predict(self._ptr, sample_mat._ptr, ct.byref(out))
+        if not ok:
+            raise _raise_last_error("RandomFourierSVM.predict failed")
+        return int(out.value)
+
+    def score(
+        self,
+        x_test: Matrix | Sequence[object],
+        y_test: Matrix | Sequence[object],
+    ) -> float:
+        x_mat = _coerce_matrix(x_test)
+        y_mat = _coerce_row_vector(y_test)
+        out = ct.c_double()
+        ok = _lib.ctorch_random_fourier_svm_score(self._ptr, x_mat._ptr, y_mat._ptr, ct.byref(out))
+        if not ok:
+            raise _raise_last_error("RandomFourierSVM.score failed")
+        return float(out.value)
+
+    def __del__(self) -> None:
+        ptr = getattr(self, "_ptr", None)
+        if ptr:
+            _lib.ctorch_random_fourier_svm_destroy(ptr)
+            self._ptr = ct.c_void_p()
+
+
+class GaussianNB:
+    __slots__ = ("_ptr",)
+
+    def __init__(
+        self,
+        x_train: Matrix | Sequence[object],
+        y_train: Matrix | Sequence[object],
+    ) -> None:
+        x_mat = _coerce_matrix(x_train)
+        y_mat = _coerce_row_vector(y_train)
+        ptr = _lib.ctorch_gaussian_nb_create(x_mat._ptr, y_mat._ptr)
+        if not ptr:
+            raise _raise_last_error("GaussianNB(...) failed")
+        self._ptr = ct.c_void_p(ptr)
+
+    def predict(self, sample: Matrix | Sequence[object]) -> int:
+        sample_mat = _coerce_row_vector(sample)
+        out = ct.c_int()
+        ok = _lib.ctorch_gaussian_nb_predict(self._ptr, sample_mat._ptr, ct.byref(out))
+        if not ok:
+            raise _raise_last_error("GaussianNB.predict failed")
+        return int(out.value)
+
+    def score(
+        self,
+        x_test: Matrix | Sequence[object],
+        y_test: Matrix | Sequence[object],
+    ) -> float:
+        x_mat = _coerce_matrix(x_test)
+        y_mat = _coerce_row_vector(y_test)
+        out = ct.c_double()
+        ok = _lib.ctorch_gaussian_nb_score(self._ptr, x_mat._ptr, y_mat._ptr, ct.byref(out))
+        if not ok:
+            raise _raise_last_error("GaussianNB.score failed")
+        return float(out.value)
+
+    def __del__(self) -> None:
+        ptr = getattr(self, "_ptr", None)
+        if ptr:
+            _lib.ctorch_gaussian_nb_destroy(ptr)
+            self._ptr = ct.c_void_p()
+
+
+class KMeans:
+    __slots__ = ("_ptr",)
+
+    def __init__(self, k: int, x_train: Matrix | Sequence[object], max_iter: int = 100) -> None:
+        x_mat = _coerce_matrix(x_train)
+        ptr = _lib.ctorch_kmeans_create(int(k), x_mat._ptr, int(max_iter))
+        if not ptr:
+            raise _raise_last_error("KMeans(...) failed")
+        self._ptr = ct.c_void_p(ptr)
+
+    def get_assignments(self) -> list[int]:
+        count = ct.c_size_t()
+        ok = _lib.ctorch_kmeans_assignment_count(self._ptr, ct.byref(count))
+        if not ok:
+            raise _raise_last_error("KMeans.get_assignments failed")
+
+        n = int(count.value)
+        if n == 0:
+            ok = _lib.ctorch_kmeans_get_assignments(self._ptr, None, 0)
+            if not ok:
+                raise _raise_last_error("KMeans.get_assignments failed")
+            return []
+
+        out = (ct.c_int * n)()
+        ok = _lib.ctorch_kmeans_get_assignments(self._ptr, out, n)
+        if not ok:
+            raise _raise_last_error("KMeans.get_assignments failed")
+        return [int(v) for v in out]
+
+    @property
+    def assignments(self) -> list[int]:
+        return self.get_assignments()
+
+    def __del__(self) -> None:
+        ptr = getattr(self, "_ptr", None)
+        if ptr:
+            _lib.ctorch_kmeans_destroy(ptr)
+            self._ptr = ct.c_void_p()
+
+
+class PCA:
+    __slots__ = ("_ptr",)
+
+    def __init__(self, centered_x: Matrix | Sequence[object]) -> None:
+        x_mat = _coerce_matrix(centered_x)
+        ptr = _lib.ctorch_pca_create(x_mat._ptr)
+        if not ptr:
+            raise _raise_last_error("PCA(...) failed")
+        self._ptr = ct.c_void_p(ptr)
+
+    def compute_projection(
+        self,
+        k: int,
+        max_iter: int = 1000,
+        tol: float = 1e-9,
+    ) -> Matrix:
+        ptr = _lib.ctorch_pca_compute_projection(
+            self._ptr,
+            int(k),
+            int(max_iter),
+            float(tol),
+        )
+        if not ptr:
+            raise _raise_last_error("PCA.compute_projection failed")
+        return Matrix(_ptr=ptr)
+
+    def __del__(self) -> None:
+        ptr = getattr(self, "_ptr", None)
+        if ptr:
+            _lib.ctorch_pca_destroy(ptr)
             self._ptr = ct.c_void_p()
 
