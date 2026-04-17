@@ -4,25 +4,32 @@
 
 namespace math
 {
+    /**
+     * @brief Stochastic gradient descent optimizer over mini-batches.
+     */
     class SGD
     {
     private:
-        double learning_rate;
-        int max_iter;
+        double learning_rate; ///< Step size per gradient update.
+        int max_iter;         ///< Maximum training iterations.
 
     public:
+        /**
+         * @brief Creates SGD optimizer.
+         * @param learning_rate Step size.
+         * @param max_iter Number of update iterations.
+         */
         SGD(double learning_rate, int max_iter) : learning_rate(learning_rate), max_iter(max_iter) {};
 
-        /*
-            Optimize method
-            Takes in
-                Loss function generator
-                xTr
-                yTr
-                initial theta
-                batch size
-        */
-
+        /**
+         * @brief Optimizes model parameters using random mini-batches.
+         * @param loss_function Sample-level loss generator.
+         * @param xTr Training features.
+         * @param yTr Training labels.
+         * @param initial_theta Initial parameter values.
+         * @param batch_size Mini-batch size sampled each iteration.
+         * @return Optimized parameter map.
+         */
         std::unordered_map<std::string, double> optimize(
             const std::shared_ptr<LossFunction> &loss_function,
             const Matrix &xTr,
@@ -58,4 +65,3 @@ namespace math
         }
     };
 } // namespace math
-
