@@ -14,10 +14,12 @@ FetchContent_MakeAvailable(googletest)
 
 add_executable(ctorch_tests
     test_matrix.cpp
+    test_optim_programs.cpp
     test_knn.cpp
     test_mab.cpp
     test_ucb.cpp
     test_pca.cpp
+    test_svm.cpp
     test_gaussian_nb.cpp
     test_dqn.cpp
     test_smoke_iris.cpp
