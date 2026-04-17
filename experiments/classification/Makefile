@@ -19,7 +19,8 @@ SOURCES = \
 	$(ML_DIR)/knn.cpp \
 	$(ML_DIR)/nn.cpp \
 	$(ML_DIR)/randomfouriersvm.cpp \
-	$(ML_DIR)/kernelsvm.cpp
+	$(ML_DIR)/kernelsvm.cpp \
+	$(ML_DIR)/gaussian_nb.cpp
 
 TARGET = main
 

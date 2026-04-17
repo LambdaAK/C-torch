@@ -20,6 +20,7 @@ set(CTORCH_SOURCES
     lib/ml/mab.cpp
     lib/ml/ucb.cpp
     lib/ml/pca.cpp
+    lib/ml/gaussian_nb.cpp
 )
 
 add_library(ctorch STATIC ${CTORCH_SOURCES})

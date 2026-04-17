@@ -28,6 +28,7 @@
 #include "ml/nn.hpp"
 #include "ml/perceptron.hpp"
 #include "ml/knn.hpp"
+#include "ml/gaussian_nb.hpp"
 
 #include "../recommender/csv.h"
 
@@ -330,6 +331,9 @@ int main()
 
     LinearRegression regression_model(xTr, yTr_regression, 0.0001, 100);
     LOG("Regression Scores (Setosa binary classification): " << regression_model.score(xTe, yTe_binary, 2.0));
+
+    ml::GaussianNB gnb(xTr, yTr);
+    LOG("Gaussian Naive Bayes (3-class Iris): " << gnb.score(xTe, yTe));
 
     // Create non-linearly separable dataset for KernelSVM and RandomFourierSVM
     LOG("\n=== Creating Non-Linearly Separable Dataset ===");

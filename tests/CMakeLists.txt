@@ -18,6 +18,7 @@ add_executable(ctorch_tests
     test_mab.cpp
     test_ucb.cpp
     test_pca.cpp
+    test_gaussian_nb.cpp
     test_dqn.cpp
 )
 

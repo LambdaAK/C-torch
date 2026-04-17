@@ -68,6 +68,7 @@ This codebase is primarily experiment-driven and educational/research oriented.
   - Logistic Regression (`logisticregression.*`)
   - Linear Regression (`linearregression.*`)
   - KNN (`knn.*`)
+  - Gaussian Naive Bayes (`gaussian_nb.*`)
 - Unsupervised / DR:
   - KMeans (`kmeans.*`)
   - PCA via QR iteration (`pca.*`)
@@ -168,6 +169,7 @@ g++ -std=c++20 -O3 -I../../lib ttt_main.cpp tictactoe.cpp replaymemory.cpp dqn.c
 - Runs:
   - Linear SVM
   - Perceptron
+  - Gaussian Naive Bayes (multiclass Iris)
   - KNN
   - Linear regression scoring variant
   - Feedforward NN classifier
