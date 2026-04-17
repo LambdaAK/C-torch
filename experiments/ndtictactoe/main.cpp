@@ -4,6 +4,10 @@
 #include <chrono>
 #include <thread>
 #include <random>
+#include <filesystem>
+#include <iostream>
+#include <iomanip>
+#include <stdexcept>
 
 #define LOG(x) std::cout << x << std::endl
 
@@ -17,6 +21,100 @@ struct Config
   ml::Sequential q_net;      // Main Q-network for action selection and training
   ml::Sequential target_net; // Target network used to compute target Q-values during training
 };
+
+namespace
+{
+constexpr const char *kDqnBestModelFile = "dqn_tictactoe_best.model";
+constexpr const char *kDqnFinalModelFile = "dqn_tictactoe_final.model";
+constexpr const char *kReinforceBestModelFile = "reinforce_tictactoe_best.model";
+constexpr const char *kReinforceFinalModelFile = "reinforce_tictactoe_final.model";
+constexpr int kDqnMetricsWindow = 500;
+
+std::filesystem::path resolve_output_dir(const std::string &path_value)
+{
+  namespace fs = std::filesystem;
+  fs::path path(path_value);
+  if (fs::is_directory(path))
+  {
+    return path;
+  }
+  if (path.has_parent_path())
+  {
+    return path.parent_path();
+  }
+  return fs::current_path();
+}
+
+void prune_model_files(const std::filesystem::path &dir,
+                       const std::string &keep_file_a,
+                       const std::string &keep_file_b)
+{
+  namespace fs = std::filesystem;
+  std::error_code ec;
+  fs::create_directories(dir, ec);
+  if (ec)
+  {
+    throw std::runtime_error("Failed to create/check model directory '" + dir.string() + "': " + ec.message());
+  }
+
+  for (const fs::directory_entry &entry : fs::directory_iterator(dir, ec))
+  {
+    if (ec)
+    {
+      throw std::runtime_error("Failed to scan model directory '" + dir.string() + "': " + ec.message());
+    }
+    if (!entry.is_regular_file())
+    {
+      continue;
+    }
+    if (entry.path().extension() != ".model")
+    {
+      continue;
+    }
+
+    const std::string filename = entry.path().filename().string();
+    if (filename == keep_file_a || filename == keep_file_b)
+    {
+      continue;
+    }
+
+    fs::remove(entry.path(), ec);
+    if (ec)
+    {
+      throw std::runtime_error("Failed to remove stale model file '" + entry.path().string() + "': " + ec.message());
+    }
+  }
+}
+
+ml::NNOptimType prompt_dqn_optimizer()
+{
+  while (true)
+  {
+    std::cout << "Select DQN optimizer:\n"
+              << "1. SGD\n"
+              << "2. Adam\n"
+              << "3. AdamW\n"
+              << "4. Adagrad\n"
+              << "5. RMSProp\n"
+              << "Enter choice (1-5): ";
+
+    std::string choice;
+    std::cin >> choice;
+    if (choice == "1")
+      return ml::NNOptimType::SGD;
+    if (choice == "2")
+      return ml::NNOptimType::ADAM;
+    if (choice == "3")
+      return ml::NNOptimType::ADAMW;
+    if (choice == "4")
+      return ml::NNOptimType::ADAGRAD;
+    if (choice == "5")
+      return ml::NNOptimType::RMSPROP;
+
+    std::cout << "Invalid optimizer choice. Please try again." << std::endl;
+  }
+}
+} // namespace
 
 std::pair<ml::Sequential, ml::Sequential> create_networks(size_t board_size)
 {
@@ -42,15 +140,26 @@ std::pair<ml::Sequential, ml::Sequential> create_networks(size_t board_size)
   return {q_net, target_net};
 }
 
-void train(ml::Sequential q_net, ml::Sequential target_net, std::string &save_dir, size_t board_size, int episodes, int batch_size = 64)
+void train(ml::Sequential q_net, ml::Sequential target_net, std::string &save_dir, size_t board_size, int episodes,
+           int batch_size = 64, ml::NNOptimType optimizer_type = ml::NNOptimType::SGD)
 {
-  DQNAgent agent(q_net, target_net, 0.99f, 0.1f, 0.99995f, 0.9f, 0.001f, batch_size);
+  const std::filesystem::path output_dir = resolve_output_dir(save_dir);
+  const std::filesystem::path best_model_path = output_dir / kDqnBestModelFile;
+  const std::filesystem::path final_model_path = output_dir / kDqnFinalModelFile;
+  prune_model_files(output_dir, kDqnBestModelFile, kDqnFinalModelFile);
+
+  DQNAgent agent(q_net, target_net, 0.99f, 0.1f, 0.99995f, 0.9f, 0.001f, batch_size, 10000, 200, optimizer_type);
 
   TicTacToe env(board_size);
 
   std::random_device rd;
   std::mt19937 gen(rd());
-  std::uniform_int_distribution<> dis(0, 1);
+  int window_wins = 0;
+  int window_losses = 0;
+  int window_draws = 0;
+  int window_games = 0;
+  float best_window_win_rate = -1.0f;
+  bool has_best_model = false;
 
   // 1 episode = 1 game
   for (int episode = 0; episode < episodes; ++episode)
@@ -89,21 +198,68 @@ void train(ml::Sequential q_net, ml::Sequential target_net, std::string &save_di
     }
 
     agent.decay_epsilon();
+    const int winner = env.get_winner();
+    if (winner == 1)
+      ++window_wins;
+    else if (winner == 2)
+      ++window_losses;
+    else
+      ++window_draws;
+    ++window_games;
 
     if ((episode + 1) % 100 == 0)
     {
       std::cout << "Episode: " << episode + 1 << ", Epsilon: " << agent.get_epsilon() << std::endl;
     }
 
-    if ((episode + 1) % 20000 == 0)
+    if ((episode + 1) % kDqnMetricsWindow == 0)
     {
-      agent.save(save_dir + "dqn_tictactoe_" + std::to_string(episode + 1) + ".model");
+      const float window_win_rate = static_cast<float>(window_wins) / static_cast<float>(window_games);
+      std::cout << "Window " << (episode + 1 - kDqnMetricsWindow + 1) << "-" << (episode + 1)
+                << " | wins: " << window_wins
+                << " losses: " << window_losses
+                << " draws: " << window_draws
+                << " | win_rate: " << window_win_rate << std::endl;
+
+      if (window_win_rate >= best_window_win_rate)
+      {
+        best_window_win_rate = window_win_rate;
+        agent.save(best_model_path.string());
+        has_best_model = true;
+      }
+
+      window_wins = 0;
+      window_losses = 0;
+      window_draws = 0;
+      window_games = 0;
     }
   }
+
+  if (window_games > 0)
+  {
+    const float window_win_rate = static_cast<float>(window_wins) / static_cast<float>(window_games);
+    if (window_win_rate >= best_window_win_rate)
+    {
+      agent.save(best_model_path.string());
+      has_best_model = true;
+    }
+  }
+
+  agent.save(final_model_path.string());
+  if (!has_best_model)
+  {
+    agent.save(best_model_path.string());
+  }
+  prune_model_files(output_dir, kDqnBestModelFile, kDqnFinalModelFile);
 }
 
 void train_reinforce(ml::Sequential policy_net, ml::Sequential critic_net, std::string &path, size_t board_size, int episodes)
 {
+  const std::filesystem::path output_dir = resolve_output_dir(path);
+  const std::filesystem::path best_model_path = output_dir / kReinforceBestModelFile;
+  const std::filesystem::path final_model_path = output_dir / kReinforceFinalModelFile;
+  prune_model_files(output_dir, kReinforceBestModelFile, kReinforceFinalModelFile);
+
   // Initialize the REINFORCE agent with improved parameters
   float lr = 0.001f;             // Learning rate
   float gamma = 0.99f;           // Discount factor
@@ -246,19 +402,18 @@ void train_reinforce(ml::Sequential policy_net, ml::Sequential critic_net, std::
       if (eval_win_rate > best_win_rate)
       {
         best_win_rate = eval_win_rate;
-        agent.save(path + "reinforce_tictactoe_best.model");
+        agent.save(best_model_path.string());
         std::cout << "New best model saved with win rate: " << best_win_rate << std::endl;
-      }
-
-      // also save on regular checkpoints
-      if ((episode + 1) % 20000 == 0)
-      {
-        agent.save(path + "reinforce_tictactoe_" + std::to_string(episode + 1) + ".model");
       }
     }
   }
 
-  agent.save(path + "reinforce_tictactoe_final.model");
+  agent.save(final_model_path.string());
+  if (best_win_rate <= 0.0f)
+  {
+    agent.save(best_model_path.string());
+  }
+  prune_model_files(output_dir, kReinforceBestModelFile, kReinforceFinalModelFile);
 }
 
 int play(const std::string &model_path, size_t board_size, bool random_human, ml::Sequential &q_net, ml::Sequential &target_net, bool no_delay = false)
@@ -680,7 +835,9 @@ int main()
     // Train new model
     if (choice == 1)
     {
-      train(config.q_net, config.target_net, path, config.board_size, 200000, 64);
+      const ml::NNOptimType optimizer_type = prompt_dqn_optimizer();
+      std::cout << "Using optimizer: " << dqn_optimizer_to_string(optimizer_type) << std::endl;
+      train(config.q_net, config.target_net, path, config.board_size, 200000, 64, optimizer_type);
     }
     else if (choice == 2)
     {

@@ -42,6 +42,9 @@
 #include <chrono>
 #include <iomanip>
 #include <thread>
+#include <filesystem>
+#include <optional>
+#include <cctype>
 
 #include "dqn.hpp"
 #include "tictactoe.hpp"
@@ -50,8 +53,6 @@
 #include "math/matrix.hpp"
 
 #define NUM_GAMES 10000
-
-#define NUM_EPOCHS_BETWEEN_SAVING_MODEL 10
 
 #define PRINT(x) std::cout << x << std::endl;
 
@@ -66,6 +67,7 @@ struct DQNConfig {
     std::function<ml::Sequential()> create_network;
     int num_training_episodes;
     std::string architecture_string;
+    std::string optimizer = "sgd";
     int board_dimension = 3; // default to 3x3
     /** 0 = seed from std::random_device; otherwise fixed seed for reproducible training/eval RNG. */
     std::uint64_t training_rng_seed = 0;
@@ -82,6 +84,10 @@ struct ExperimentConfig {
 };
 
 namespace {
+
+constexpr int kTrainMetricsWindow = 500;
+constexpr const char *kBestModelFile = "dqn_tictactoe_best.model";
+constexpr const char *kFinalModelFile = "dqn_tictactoe_final.model";
 
 int dqn_state_dim(int board_dim) { return 2 * board_dim * board_dim; }
 
@@ -134,6 +140,50 @@ ml::Sequential make_dqn_stacked_hidden_mlp(int in_dim, int hidden, int relu_sect
     return net;
 }
 
+void prune_dqn_model_artifacts(const std::string &folder_name)
+{
+    namespace fs = std::filesystem;
+
+    std::error_code ec;
+    fs::create_directories(folder_name, ec);
+    if (ec) {
+        throw std::runtime_error("Failed to create/check artifact directory '" + folder_name + "': " + ec.message());
+    }
+
+    for (const fs::directory_entry &entry : fs::directory_iterator(folder_name, ec)) {
+        if (ec) {
+            throw std::runtime_error("Failed to scan artifact directory '" + folder_name + "': " + ec.message());
+        }
+        if (!entry.is_regular_file()) {
+            continue;
+        }
+
+        const fs::path file_path = entry.path();
+        if (file_path.extension() != ".model") {
+            continue;
+        }
+
+        const std::string file_name = file_path.filename().string();
+        if (file_name == kBestModelFile || file_name == kFinalModelFile) {
+            continue;
+        }
+
+        fs::remove(file_path, ec);
+        if (ec) {
+            throw std::runtime_error("Failed to prune checkpoint '" + file_path.string() + "': " + ec.message());
+        }
+    }
+}
+
+ml::NNOptimType optimizer_type_from_config(const DQNConfig &config)
+{
+    try {
+        return dqn_optimizer_from_string(config.optimizer);
+    } catch (const std::exception &e) {
+        throw std::runtime_error("DQNConfig optimizer error for '" + config.architecture_string + "': " + e.what());
+    }
+}
+
 } // namespace
 
 /**
@@ -173,6 +223,11 @@ void validate_config(const DQNConfig& config) {
         std::cerr << "DQNConfig: " << config.architecture_string << std::endl;
         throw std::runtime_error("batch_size is empty!");
     }
+    if (config.optimizer.empty()) {
+        std::cerr << "DQNConfig: " << config.architecture_string << std::endl;
+        throw std::runtime_error("optimizer is empty!");
+    }
+    (void)optimizer_type_from_config(config);
 }
 
 DQNAgent create_agent(DQNConfig config, std::string file_path, bool eval_mode, int board_dim) {
@@ -182,9 +237,10 @@ DQNAgent create_agent(DQNConfig config, std::string file_path, bool eval_mode, i
 
     validate_config(config);
 
+    const ml::NNOptimType optimizer_type = optimizer_type_from_config(config);
     DQNAgent agent(q_net, target_net, std::stof(config.epsilon_start), std::stof(config.epsilon_end),
                    std::stof(config.epsilon_decay), std::stof(config.gamma), std::stof(config.learning_rate),
-                   std::stoi(config.batch_size), 10000, std::stoi(config.update_frequency));
+                   std::stoi(config.batch_size), 10000, std::stoi(config.update_frequency), optimizer_type);
     agent.load(file_path);
     if (eval_mode) {
         agent.set_epsilon(0.0f);
@@ -200,10 +256,11 @@ DQNAgent train_agent(DQNConfig config, std::function<std::string(DQNConfig)> get
     int batch_size = std::stoi(config.batch_size);
 
     validate_config(config);
+    const ml::NNOptimType optimizer_type = optimizer_type_from_config(config);
 
     DQNAgent agent(q_net, target_net, std::stof(config.epsilon_start), std::stof(config.epsilon_end),
                    std::stof(config.epsilon_decay), std::stof(config.gamma), std::stof(config.learning_rate),
-                   std::stoi(config.batch_size), 10000, std::stoi(config.update_frequency));
+                   std::stoi(config.batch_size), 10000, std::stoi(config.update_frequency), optimizer_type);
     
     const int train_board = board_dim;
     TicTacToe env(train_board);
@@ -215,14 +272,21 @@ DQNAgent train_agent(DQNConfig config, std::function<std::string(DQNConfig)> get
         seed = experiment_default_rng_seed;
     }
     std::mt19937 gen = make_training_rng(seed);
-    std::uniform_int_distribution<> dis(0, 1);
-    
     std::string folder_name = get_folder_name(config);
+    const std::filesystem::path best_model_path = std::filesystem::path(folder_name) / kBestModelFile;
+    const std::filesystem::path final_model_path = std::filesystem::path(folder_name) / kFinalModelFile;
 
     PRINT("folder name: " << folder_name);
+    PRINT("optimizer: " << dqn_optimizer_to_string(optimizer_type));
 
-    std::string mkdir_cmd = "mkdir -p \"" + folder_name + "\"";
-    system(mkdir_cmd.c_str());
+    prune_dqn_model_artifacts(folder_name);
+
+    int window_wins = 0;
+    int window_losses = 0;
+    int window_draws = 0;
+    int window_games = 0;
+    float best_window_win_rate = -1.0f;
+    bool has_best_model = false;
 
     for (int episode = 0; episode < config.num_training_episodes; ++episode) {
         env.reset();
@@ -255,24 +319,73 @@ DQNAgent train_agent(DQNConfig config, std::function<std::string(DQNConfig)> get
         }
         
         agent.decay_epsilon();
+        const int winner = env.get_winner();
+        if (winner == 1) {
+            ++window_wins;
+        } else if (winner == 2) {
+            ++window_losses;
+        } else {
+            ++window_draws;
+        }
+        ++window_games;
 
         if ((episode + 1) % 100 == 0) {
             std::cout << "Episode: " << episode + 1 << ", Epsilon: " << agent.get_epsilon() << std::endl;
         }
-                if ((episode + 1) % NUM_EPOCHS_BETWEEN_SAVING_MODEL == 0) {
-            std::string model_path = folder_name + "/dqn_tictactoe_" + std::to_string(episode + 1) + ".model";
-            agent.save(model_path);
+
+        if ((episode + 1) % kTrainMetricsWindow == 0) {
+            const float window_win_rate = static_cast<float>(window_wins) / static_cast<float>(window_games);
+            std::cout << "Window " << (episode + 1 - kTrainMetricsWindow + 1) << "-" << (episode + 1)
+                      << " | wins: " << window_wins
+                      << " losses: " << window_losses
+                      << " draws: " << window_draws
+                      << " | win_rate: " << window_win_rate << std::endl;
+
+            if (window_win_rate >= best_window_win_rate) {
+                best_window_win_rate = window_win_rate;
+                agent.save(best_model_path.string());
+                has_best_model = true;
+                std::cout << "Updated best model at win_rate=" << window_win_rate << std::endl;
+            }
+
+            window_wins = 0;
+            window_losses = 0;
+            window_draws = 0;
+            window_games = 0;
         }
     }
+
+    if (window_games > 0) {
+        const float window_win_rate = static_cast<float>(window_wins) / static_cast<float>(window_games);
+        if (window_win_rate >= best_window_win_rate) {
+            best_window_win_rate = window_win_rate;
+            agent.save(best_model_path.string());
+            has_best_model = true;
+        }
+    }
+
+    agent.save(final_model_path.string());
+    if (!has_best_model) {
+        agent.save(best_model_path.string());
+    }
+    prune_dqn_model_artifacts(folder_name);
 
     return agent;
 }
 
 /**
  * Get the episode number from the file name
- * The format of the input should be `dqn_tictactoe_<episode_number>.model`
+ * Numeric checkpoints use `dqn_tictactoe_<episode_number>.model`.
+ * Best/final snapshots are mapped to sentinel values so they can still be tabulated.
  */
 int episode_number_from_file_name(std::string file_name) {
+    if (file_name.find(kBestModelFile) != std::string::npos) {
+        return -2;
+    }
+    if (file_name.find(kFinalModelFile) != std::string::npos) {
+        return -1;
+    }
+
     size_t last_underscore = file_name.find_last_of('_');
     if (last_underscore == std::string::npos) {
         return -1; 
@@ -1281,6 +1394,75 @@ enum PhaseOneOption {
     LOAD_MODEL
 };
 
+struct CliOptions {
+    std::optional<std::string> optimizer_override;
+    bool show_help = false;
+};
+
+void print_usage(const char *program_name) {
+    std::cout << "Usage: " << program_name << " [--optimizer <name>] [--help]\n"
+              << "  --optimizer <name>  One of: sgd, adam, adamw, adagrad, rmsprop\n";
+}
+
+CliOptions parse_cli_options(int argc, char **argv) {
+    CliOptions options;
+    const std::string optimizer_prefix = "--optimizer=";
+
+    for (int i = 1; i < argc; ++i) {
+        const std::string arg = argv[i];
+        if (arg == "--help" || arg == "-h") {
+            options.show_help = true;
+            return options;
+        }
+        if (arg == "--optimizer") {
+            if (i + 1 >= argc) {
+                throw std::runtime_error("--optimizer requires a value.");
+            }
+            options.optimizer_override = dqn_optimizer_to_string(dqn_optimizer_from_string(argv[++i]));
+            continue;
+        }
+        if (arg.rfind(optimizer_prefix, 0) == 0) {
+            options.optimizer_override =
+                dqn_optimizer_to_string(dqn_optimizer_from_string(arg.substr(optimizer_prefix.size())));
+            continue;
+        }
+        throw std::runtime_error("Unknown argument: " + arg);
+    }
+
+    return options;
+}
+
+std::string prompt_for_optimizer() {
+    while (true) {
+        std::cout << "Select optimizer for DQN experiments:\n"
+                  << "1. SGD\n"
+                  << "2. Adam\n"
+                  << "3. AdamW\n"
+                  << "4. Adagrad\n"
+                  << "5. RMSProp\n"
+                  << "Enter choice (1-5): ";
+
+        std::string input;
+        std::cin >> input;
+        if (input == "1") return "sgd";
+        if (input == "2") return "adam";
+        if (input == "3") return "adamw";
+        if (input == "4") return "adagrad";
+        if (input == "5") return "rmsprop";
+
+        std::cout << "Invalid optimizer choice. Please try again." << std::endl;
+    }
+}
+
+void apply_optimizer_override(ExperimentConfig &experiment_config, const std::string &optimizer_name) {
+    const ml::NNOptimType optimizer_type = dqn_optimizer_from_string(optimizer_name);
+    const std::string canonical_optimizer = dqn_optimizer_to_string(optimizer_type);
+    for (DQNConfig &config : experiment_config.configs) {
+        config.optimizer = canonical_optimizer;
+    }
+    std::cout << "Using optimizer: " << canonical_optimizer << std::endl;
+}
+
 PhaseOneOption get_phase_one_option() {
     std::string input;
     while (true) {
@@ -1295,7 +1477,7 @@ PhaseOneOption get_phase_one_option() {
     }
 }
 
-void run_experiment_phase_one() {
+void run_experiment_phase_one(const std::optional<std::string> &optimizer_override = std::nullopt) {
 
     std::vector<ExperimentConfig> experiment_configs = {
         epsilon_decay_experiment(),
@@ -1326,10 +1508,15 @@ void run_experiment_phase_one() {
 
     if (index < 1 || index > static_cast<int>(experiment_configs.size())) {
         std::cout << "Invalid index. Please try again." << std::endl;
-        return run_experiment_phase_one();
+        return run_experiment_phase_one(optimizer_override);
     }
 
     ExperimentConfig experiment_config = experiment_configs[index - 1];
+    if (optimizer_override.has_value()) {
+        apply_optimizer_override(experiment_config, *optimizer_override);
+    } else {
+        apply_optimizer_override(experiment_config, prompt_for_optimizer());
+    }
     run_experiment(experiment_config);
 }
 
@@ -1526,12 +1713,25 @@ void run_load_model_phase_one() {
     
 }
 
-int main() {
+int main(int argc, char **argv) {
+
+    CliOptions cli_options;
+    try {
+        cli_options = parse_cli_options(argc, argv);
+    } catch (const std::exception &e) {
+        std::cerr << e.what() << std::endl;
+        print_usage(argv[0]);
+        return 1;
+    }
+    if (cli_options.show_help) {
+        print_usage(argv[0]);
+        return 0;
+    }
 
     PhaseOneOption phase_one_option = get_phase_one_option();
 
     if (phase_one_option == PhaseOneOption::RUN_EXPERIMENT) {
-        run_experiment_phase_one();
+        run_experiment_phase_one(cli_options.optimizer_override);
     }
 
     else if (phase_one_option == PhaseOneOption::LOAD_MODEL) {

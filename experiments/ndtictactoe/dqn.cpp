@@ -1,15 +1,74 @@
 #include "dqn.hpp"
 
+#include <cctype>
 #include <limits>
 #include <stdexcept>
+
+namespace
+{
+std::string to_lower(std::string value)
+{
+  for (char &ch : value)
+  {
+    ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+  }
+  return value;
+}
+} // namespace
+
+std::string dqn_optimizer_to_string(ml::NNOptimType optimizer_type)
+{
+  switch (optimizer_type)
+  {
+  case ml::NNOptimType::SGD:
+    return "sgd";
+  case ml::NNOptimType::ADAGRAD:
+    return "adagrad";
+  case ml::NNOptimType::RMSPROP:
+    return "rmsprop";
+  case ml::NNOptimType::ADAM:
+    return "adam";
+  case ml::NNOptimType::ADAMW:
+    return "adamw";
+  }
+  throw std::invalid_argument("Unknown DQN optimizer type.");
+}
+
+ml::NNOptimType dqn_optimizer_from_string(const std::string &optimizer_name)
+{
+  const std::string normalized = to_lower(optimizer_name);
+  if (normalized == "sgd")
+  {
+    return ml::NNOptimType::SGD;
+  }
+  if (normalized == "adagrad")
+  {
+    return ml::NNOptimType::ADAGRAD;
+  }
+  if (normalized == "rmsprop")
+  {
+    return ml::NNOptimType::RMSPROP;
+  }
+  if (normalized == "adam")
+  {
+    return ml::NNOptimType::ADAM;
+  }
+  if (normalized == "adamw")
+  {
+    return ml::NNOptimType::ADAMW;
+  }
+
+  throw std::invalid_argument("Unsupported optimizer '" + optimizer_name +
+                              "'. Expected one of: sgd, adam, adamw, adagrad, rmsprop.");
+}
   
 DQNAgent::DQNAgent(ml::Sequential q_net, ml::Sequential target_net, float start, float end, float decay, float gamma, 
-    float lr, size_t batch_size, size_t memory_capacity, int update_freq)
+    float lr, size_t batch_size, size_t memory_capacity, int update_freq, ml::NNOptimType optimizer_type)
     : q_network(q_net), target_network(target_net), memory(memory_capacity), epsilon(start), 
       start(start), end(end), decay(decay), gamma(gamma), lr(lr), batch_size(batch_size), 
       update_frequency(update_freq), steps(0) {
   
-  optimizer = ml::NN_SGD(q_network.parameters(), lr, batch_size);
+  optimizer = ml::NNOptimizer(q_network.parameters(), lr, batch_size, optimizer_type);
   if (!target_network.copy_parameters_from(q_network))
   {
     throw std::runtime_error("Failed to initialize target network from Q-network.");
