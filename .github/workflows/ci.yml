@@ -40,6 +40,9 @@ jobs:
       - name: Build
         run: cmake --build build --parallel
 
+      - name: Unit tests (ctest)
+        run: ctest --test-dir build --output-on-failure
+
       - name: Smoke run (classification)
         working-directory: experiments/classification
         run: ../../build/classification

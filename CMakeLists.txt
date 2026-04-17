@@ -61,3 +61,10 @@ target_include_directories(ttt_main PRIVATE
     ${CMAKE_SOURCE_DIR}/experiments/ndtictactoe
 )
 target_link_libraries(ttt_main PRIVATE ctorch)
+
+option(CTORCH_BUILD_TESTS "Build GoogleTest unit tests (downloads googletest)" ON)
+include(CTest)
+if(CTORCH_BUILD_TESTS)
+    enable_testing()
+    add_subdirectory(tests)
+endif()

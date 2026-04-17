@@ -111,6 +111,16 @@ cmake --build build --parallel
 This produces `build/classification`, `build/tictactoe`, and `build/ttt_main`.  
 Include paths use `-I lib` so sources include headers as `"math/..."` and `"ml/..."`.
 
+Unit tests (GoogleTest, fetched on first configure) build with the default `CTORCH_BUILD_TESTS=ON`:
+
+```bash
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --parallel
+ctest --test-dir build --output-on-failure
+```
+
+To skip tests (no network fetch for googletest): `cmake -B build -DCTORCH_BUILD_TESTS=OFF`.
+
 ### Make (per experiment)
 
 Each experiment directory still has a `Makefile` for direct `g++` builds.
@@ -201,7 +211,7 @@ Prefer writing new checkpoints under a dedicated directory (for example a local 
 - Some planned features in comments/proposal are partial or not productionized.
 - `lib/math/token.hpp` lexer/parser scaffolding is incomplete.
 - Several scripts/flows assume local environment details (Python version, headers, OS commands).
-- Minimal automated test coverage is included in-repo.
+- Automated tests cover selected `lib` and DQN behaviors (`ctest` / `ctorch_tests`); coverage is not exhaustive.
 - Documentation quality is uneven across source files.
 
 ## Project proposal
