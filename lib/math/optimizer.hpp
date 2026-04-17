@@ -9,15 +9,32 @@
 
 namespace math
 {
-    // Optimizer class that dispatches to specific implementations.
+    /**
+     * @brief High-level optimizer dispatcher.
+     *
+     * Routes optimization requests to concrete optimizer implementations
+     * based on `OptimParams::get_optim_type()`.
+     */
     class Optimizer
     {
     private:
-        OptimParams optim_params;
+        OptimParams optim_params; ///< Optimizer configuration.
 
     public:
+        /**
+         * @brief Creates dispatcher with fixed optimizer configuration.
+         * @param optim_params Optimizer family and hyperparameters.
+         */
         Optimizer(OptimParams optim_params) : optim_params(optim_params) {}
 
+        /**
+         * @brief Optimizes parameters for a supervised loss function.
+         * @param loss_function Sample-level loss generator.
+         * @param xTr Training features.
+         * @param yTr Training labels.
+         * @param initial_theta Initial parameter map.
+         * @return Optimized parameter map.
+         */
         std::unordered_map<std::string, double> optimize(
             const std::shared_ptr<LossFunction> &loss_function,
             const Matrix &xTr,
@@ -91,4 +108,3 @@ namespace math
         }
     };
 } // namespace math
-

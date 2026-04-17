@@ -4,17 +4,29 @@
 
 namespace math
 {
+    /**
+     * @brief Full-batch gradient descent optimizer for AST-defined objectives.
+     */
     class GD
     {
     private:
-        double learning_rate;
-        int max_iter;
+        double learning_rate; ///< Step size per gradient update.
+        int max_iter;         ///< Maximum update iterations.
 
     public:
+        /**
+         * @brief Creates gradient descent optimizer.
+         * @param learning_rate Step size.
+         * @param max_iter Maximum iterations.
+         */
         GD(double learning_rate, int max_iter) : learning_rate(learning_rate), max_iter(max_iter) {};
 
         /**
-         * Optimize the function represented by the AST node with respect to var_name
+         * @brief Optimizes one scalar variable while keeping others fixed.
+         * @param node Objective expression AST.
+         * @param var_name Target variable name.
+         * @param initial_value Initial variable value.
+         * @return Optimized variable value.
          */
         double optimize_single(std::shared_ptr<ASTNode> node, std::string var_name, double initial_value)
         {
@@ -42,8 +54,10 @@ namespace math
         }
 
         /**
-         * Optimize the function with respect to all variables
-         * initial_vector maps from the variable names to the initial values
+         * @brief Optimizes all variables in the provided parameter map.
+         * @param node Objective expression AST.
+         * @param initial_vector Initial variable values keyed by name.
+         * @return Optimized variable map.
          */
         std::unordered_map<std::string, double> optimize(std::shared_ptr<ASTNode> node, std::unordered_map<std::string, double> initial_vector)
         {
@@ -73,4 +87,3 @@ namespace math
         }
     };
 } // namespace math
-

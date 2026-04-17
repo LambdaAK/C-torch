@@ -4,17 +4,32 @@
 
 namespace math
 {
+    /**
+     * @brief AdaGrad optimizer for AST-based objectives.
+     */
     class Adagrad
     {
     private:
-        double learning_rate;
-        int max_iter;
-        double epsilon;
+        double learning_rate; ///< Base learning rate.
+        int max_iter;         ///< Maximum optimizer iterations.
+        double epsilon;       ///< Numerical stability constant.
 
     public:
+        /**
+         * @brief Creates AdaGrad optimizer.
+         * @param learning_rate Base learning rate.
+         * @param max_iter Number of optimization iterations.
+         * @param epsilon Numerical stability constant.
+         */
         Adagrad(double learning_rate, int max_iter, double epsilon = 1e-8)
             : learning_rate(learning_rate), max_iter(max_iter), epsilon(epsilon) {}
 
+        /**
+         * @brief Optimizes a single AST objective directly.
+         * @param node Objective expression.
+         * @param initial_theta Initial parameter values.
+         * @return Optimized parameter map.
+         */
         std::unordered_map<std::string, double> optimize(
             const std::shared_ptr<ASTNode> &node,
             std::unordered_map<std::string, double> initial_theta)
@@ -38,6 +53,15 @@ namespace math
             return theta;
         }
 
+        /**
+         * @brief Optimizes supervised loss using random mini-batches.
+         * @param loss_function Sample-level loss generator.
+         * @param xTr Training features.
+         * @param yTr Training labels.
+         * @param initial_theta Initial parameter map.
+         * @param batch_size Mini-batch size.
+         * @return Optimized parameter map.
+         */
         std::unordered_map<std::string, double> optimize(
             const std::shared_ptr<LossFunction> &loss_function,
             const Matrix &xTr,
@@ -66,4 +90,3 @@ namespace math
         }
     };
 } // namespace math
-
