@@ -1,77 +1,24 @@
 #include "svm.hpp"
-#include "math/optim.hpp"
-#include "math/dataaugmentor.hpp"
 
-using math::ASTNode;
-using math::GD;
-using math::Num;
-using math::Var;
+#include "math/dataaugmentor.hpp"
+#include "math/optim_qp.hpp"
+
+#include <cmath>
+#include <stdexcept>
+#include <vector>
 
 namespace ml
 {
-
     SVM::SVM()
     {
         // default constructor
     }
 
-    std::shared_ptr<ASTNode> SVM::loss_function() const
+    SVM::SVM(Matrix xTr, Matrix yTr, double learning_rate, int max_iter, double C, DataAugmentationType augmentation_type)
+        : xTr(xTr),
+          yTr(yTr),
+          augmentation_type(augmentation_type)
     {
-        std::shared_ptr<ASTNode> w_t_w = Num(0);
-
-        // add w ^ T w
-
-        for (size_t i = 0; i < weights.numCols(); i++)
-        {
-            std::shared_ptr<ASTNode> w_i = Var("w" + std::to_string(i));
-            w_t_w = w_t_w + w_i * w_i;
-        }
-
-        // add the sum of the hinge losses weighted by C, the cost constant
-
-        std::shared_ptr<ASTNode> hinge_losses = Num(0);
-
-        for (size_t i = 0; i < xTr.numRows(); i++)
-        {
-            Matrix x = xTr_rows[i];
-            int y = yTr.at(0, i);
-
-            // compute w ^ T x + b
-
-            std::shared_ptr<ASTNode> w_transpose_x = Num(0);
-
-            for (size_t j = 0; j < x.numCols(); j++)
-            {
-                std::shared_ptr<ASTNode> w_j = Var("w" + std::to_string(j));
-                std::shared_ptr<ASTNode> x_j = Num(x.at(0, j));
-                w_transpose_x = w_transpose_x + w_j * x_j;
-            }
-
-            // add b
-
-            std::shared_ptr<ASTNode> b = Var("b");
-
-            std::shared_ptr<ASTNode> w_transpose_x_plus_b = w_transpose_x + b;
-
-            // compute the hinge loss
-
-            std::shared_ptr<ASTNode> hinge_loss = Max(Num(0), Num(1) - Num(y) * w_transpose_x_plus_b);
-
-            hinge_losses = hinge_losses + hinge_loss;
-        }
-
-        // construct the total loss function
-
-        std::shared_ptr<ASTNode> C = Num(this->C);
-
-        std::shared_ptr<ASTNode> loss = w_t_w + C * hinge_losses;
-
-        return loss;
-    }
-
-    SVM::SVM(Matrix xTr, Matrix yTr, double learning_rate, int max_iter, double C, DataAugmentationType augmentation_type) : xTr(xTr), yTr(yTr), learning_rate(learning_rate), max_iter(max_iter), C(C), augmentation_type(augmentation_type)
-    {
-        // check the dimensions of the matrices
         if (xTr.numRows() != yTr.numCols())
         {
             throw std::invalid_argument("Number of training samples and labels must be equal.");
@@ -82,66 +29,132 @@ namespace ml
             throw std::invalid_argument("Labels must be a row vector.");
         }
 
-        // augment the data
-
-        xTr = DataAugmentor::augment_data(xTr, augmentation_type);
-
-        // xTr.print();
-
-        // cache the rows of xTr as matrices
-        xTr_rows = xTr.rowsAsMatrices();
-
-        // initialize the weights and bias
-
-        weights = Matrix(1, xTr.numCols());
-        bias = 0;
-
-        // compute the loss function
-
-        std::shared_ptr<ASTNode> loss = loss_function();
-
-        // optimize the loss function with respect to the weights and bias
-
-        std::unordered_map<std::string, double> values;
-
-        for (size_t i = 0; i < xTr.numCols(); i++)
+        if (C <= 0)
         {
-            std::string w_i = "w" + std::to_string(i);
-            values[w_i] = 1;
+            throw std::invalid_argument("C must be positive.");
         }
 
-        values["b"] = 1;
-
-        GD gd(learning_rate, max_iter);
-
-        values = gd.optimize(loss, values);
-
-        // update the weights and bias
-
-        for (size_t i = 0; i < xTr.numCols(); i++)
+        if (max_iter <= 0)
         {
-            std::string w_i = "w" + std::to_string(i);
-            weights(0, i) = values[w_i];
+            throw std::invalid_argument("max_iter must be positive.");
         }
 
-        bias = values["b"];
+        this->xTr = DataAugmentor::augment_data(xTr, augmentation_type);
+
+        const size_t n_samples = this->xTr.numRows();
+        const size_t n_features = this->xTr.numCols();
+
+        std::vector<double> labels(n_samples, 0.0);
+        for (size_t i = 0; i < n_samples; ++i)
+        {
+            labels[i] = this->yTr(0, i);
+            if (std::abs(std::abs(labels[i]) - 1.0) > 1e-9)
+            {
+                throw std::invalid_argument("SVM labels must be {-1, +1}.");
+            }
+        }
+
+        Matrix q(n_samples, n_samples);
+        for (size_t i = 0; i < n_samples; ++i)
+        {
+            for (size_t j = 0; j < n_samples; ++j)
+            {
+                double x_dot = 0.0;
+                for (size_t k = 0; k < n_features; ++k)
+                {
+                    x_dot += this->xTr(i, k) * this->xTr(j, k);
+                }
+
+                q(i, j) = labels[i] * labels[j] * x_dot;
+            }
+        }
+
+        std::vector<double> c_vec(n_samples, -1.0);
+        std::vector<double> lower_bounds(n_samples, 0.0);
+        std::vector<double> upper_bounds(n_samples, C);
+
+        // Equality constraint for SVM dual: sum_i alpha_i * y_i = 0.
+        std::vector<double> equality_coeffs = labels;
+
+        // Very small legacy learning rates (e.g. 1e-4) were tuned for hinge-loss GD,
+        // so default to an auto step size for the QP solver unless a meaningful step is provided.
+        const double qp_step_size = (learning_rate > 1e-3) ? learning_rate : 0.0;
+
+        math::QuadraticProgramSolver qp_solver(
+            max_iter,
+            1e-6,
+            50,
+            qp_step_size);
+
+        const math::QuadraticProgramResult qp_result = qp_solver.solve(
+            q,
+            c_vec,
+            lower_bounds,
+            upper_bounds,
+            equality_coeffs,
+            0.0);
+
+        const std::vector<double> &alphas = qp_result.solution;
+
+        weights = Matrix(1, n_features);
+        for (size_t i = 0; i < n_samples; ++i)
+        {
+            const double alpha_y = alphas[i] * labels[i];
+            for (size_t j = 0; j < n_features; ++j)
+            {
+                weights(0, j) += alpha_y * this->xTr(i, j);
+            }
+        }
+
+        auto decision_without_bias = [&](size_t row_idx)
+        {
+            double value = 0.0;
+            for (size_t j = 0; j < n_features; ++j)
+            {
+                value += weights(0, j) * this->xTr(row_idx, j);
+            }
+            return value;
+        };
+
+        const double alpha_tol = 1e-5;
+        double bias_sum = 0.0;
+        int bias_count = 0;
+
+        for (size_t i = 0; i < n_samples; ++i)
+        {
+            if (alphas[i] > alpha_tol && alphas[i] < (C - alpha_tol))
+            {
+                bias_sum += labels[i] - decision_without_bias(i);
+                ++bias_count;
+            }
+        }
+
+        if (bias_count == 0)
+        {
+            for (size_t i = 0; i < n_samples; ++i)
+            {
+                if (alphas[i] > alpha_tol)
+                {
+                    bias_sum += labels[i] - decision_without_bias(i);
+                    ++bias_count;
+                }
+            }
+        }
+
+        bias = (bias_count > 0) ? (bias_sum / static_cast<double>(bias_count)) : 0.0;
     }
 
     int SVM::predict(const Matrix &x) const
     {
-
-        // augment x
-
         const Matrix x_augmented = DataAugmentor::augment_data(x, augmentation_type);
 
-        // compute sign(w ^ T x + b)
-        double a = 0;
+        if (x_augmented.numCols() != weights.numCols())
+        {
+            throw std::invalid_argument("Feature dimension mismatch between input and trained SVM weights.");
+        }
 
-        a += weights.inner_product(x_augmented);
-
-        a += bias;
-
-        return (a > 0) ? 1 : -1;
+        double score = weights.inner_product(x_augmented) + bias;
+        return (score >= 0.0) ? 1 : -1;
     }
 
     double SVM::score(const Matrix &xTe, const Matrix &yTe) const
@@ -165,8 +178,8 @@ namespace ml
                 x_i(0, j) = xTe(i, j);
             }
 
-            int prediction = predict(x_i);
-            int actual = static_cast<int>(yTe(0, i));
+            const int prediction = predict(x_i);
+            const int actual = static_cast<int>(yTe(0, i));
             if (prediction == actual)
             {
                 correct++;
@@ -176,4 +189,4 @@ namespace ml
         return static_cast<double>(correct) / xTe.numRows();
     }
 
-}
+} // namespace ml

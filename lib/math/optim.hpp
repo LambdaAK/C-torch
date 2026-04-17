@@ -10,5 +10,6 @@
 #include "optim_rmsprop.hpp"
 #include "optim_adam.hpp"
 #include "optim_adamw.hpp"
+#include "optim_lp.hpp"
+#include "optim_qp.hpp"
 #include "optimizer.hpp"
-
