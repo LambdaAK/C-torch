@@ -1,0 +1,9 @@
+{
+  "include": [
+    "**/*.py"
+  ],
+  "extraPaths": [
+    "python"
+  ],
+  "typeCheckingMode": "basic"
+}

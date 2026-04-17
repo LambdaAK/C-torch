@@ -147,6 +147,39 @@ cmake --build build --target recommender
 
 If configure fails, read the message: missing `CURL`, `Python3`, or `numpy` is the usual cause.
 
+### Optional: Python bindings pilot (Matrix + KNN)
+
+This repository includes a minimal Python binding slice for:
+
+- `Matrix` (`shape`, element access, `+`, `-`, scalar `*`, matrix `@`, transpose)
+- `KNN` (`predict`, `score`, `k` getter/setter)
+
+Build the binding library:
+
+```bash
+cmake -B build -DCTORCH_BUILD_TESTS=OFF -DCTORCH_BUILD_PYTHON_BINDINGS=ON -DCMAKE_BUILD_TYPE=Release
+cmake --build build --target ctorch_c --parallel
+```
+
+Run from the repo root:
+
+```bash
+PYTHONPATH="$PWD/python" python3 - <<'PY'
+from ctorch import Matrix, KNN
+
+a = Matrix(data=[[1.0, 2.0], [3.0, 4.0]])
+b = Matrix(data=[[5.0, 6.0], [7.0, 8.0]])
+print((a + b).to_list())
+
+x_tr = Matrix(data=[[0.0, 0.0], [10.0, 10.0], [1.0, 1.0]])
+y_tr = Matrix(data=[[0.0, 1.0, 2.0]])
+knn = KNN(1, x_tr, y_tr)
+print(knn.predict([[0.1, 0.1]]))
+PY
+```
+
+If your shared library is not in `build/`, set `CTORCH_LIB_PATH` to the built `libctorch_c` path.
+
 ### Make (per experiment)
 
 Each experiment directory still has a `Makefile` for direct `g++` builds.
