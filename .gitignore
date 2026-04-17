@@ -29,5 +29,8 @@ _deps/
 __pycache__/
 *.pyc
 
-# Optional: large local result trees (uncomment if you do not track these)
-# experiments/ndtictactoe/models-and-data/
+# RL sweep/checkpoint trees (keep local only; use scripts/git-untrack-artifacts.sh if already committed)
+experiments/ndtictactoe/models-and-data/
+
+# Optional: ignore bulky recommender outputs (uncomment if you do not track these)
+# experiments/recommender/**/*.json

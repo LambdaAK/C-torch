@@ -1,4 +1,5 @@
-# Compiler and flags
+# Standalone build: vendor nlohmann/json under json/single_include/ or use system <nlohmann/json.hpp>.
+# Prefer the CMake target with -DCTORCH_BUILD_RECOMMENDER=ON (fetches json automatically).
 CXX = g++
 CXXFLAGS = -std=c++20 -O3 -lcurl -lpthread -I../../lib -Ijson/single_include
 

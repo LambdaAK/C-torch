@@ -1,4 +1,8 @@
 cmake_minimum_required(VERSION 3.16)
+if(POLICY CMP0135)
+    cmake_policy(SET CMP0135 NEW)
+endif()
+
 project(ctorch CXX)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -68,4 +72,42 @@ include(CTest)
 if(CTORCH_BUILD_TESTS)
     enable_testing()
     add_subdirectory(tests)
+endif()
+
+option(CTORCH_BUILD_RECOMMENDER "Build experiments/recommender (requires CURL, Python dev libs, NumPy headers)" OFF)
+if(CTORCH_BUILD_RECOMMENDER)
+    include(FetchContent)
+    set(JSON_BuildTests OFF CACHE INTERNAL "")
+    FetchContent_Declare(
+        nlohmann_json
+        GIT_REPOSITORY https://github.com/nlohmann/json.git
+        GIT_TAG v3.11.3
+    )
+    FetchContent_MakeAvailable(nlohmann_json)
+
+    find_package(CURL REQUIRED)
+    find_package(Python3 3.9 COMPONENTS Interpreter Development REQUIRED)
+    execute_process(
+        COMMAND "${Python3_EXECUTABLE}" -c "import numpy; print(numpy.get_include())"
+        OUTPUT_VARIABLE CTORCH_NUMPY_INCLUDE
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        RESULT_VARIABLE _ctorch_numpy_rc
+    )
+    if(NOT _ctorch_numpy_rc EQUAL 0)
+        message(FATAL_ERROR "CTORCH_BUILD_RECOMMENDER requires NumPy (import numpy failed). Install python3-numpy or pip install numpy.")
+    endif()
+
+    add_executable(recommender experiments/recommender/main.cpp)
+    target_include_directories(recommender PRIVATE
+        ${CMAKE_SOURCE_DIR}/lib
+        ${CMAKE_SOURCE_DIR}/experiments/recommender
+        ${Python3_INCLUDE_DIRS}
+        ${CTORCH_NUMPY_INCLUDE}
+    )
+    target_link_libraries(recommender PRIVATE
+        ctorch
+        nlohmann_json::nlohmann_json
+        CURL::libcurl
+        Python3::Python
+    )
 endif()

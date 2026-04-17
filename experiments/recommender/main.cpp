@@ -16,7 +16,11 @@
 
 #include <curl/curl.h>
 
-#include "json/single_include/nlohmann/json.hpp" // or use <nlohmann/json.hpp> if preferred
+#if __has_include(<nlohmann/json.hpp>)
+#include <nlohmann/json.hpp>
+#else
+#include "json/single_include/nlohmann/json.hpp"
+#endif
 #include "csv.h"
 #include "matplotlibcpp.h"
 

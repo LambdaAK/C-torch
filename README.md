@@ -24,7 +24,9 @@ This codebase is primarily experiment-driven and educational/research oriented.
 
 ```text
 .
-├── CMakeLists.txt      # unified build (classification + ndtictactoe binaries)
+├── Makefile            # convenience: make build / make test
+├── CMakeLists.txt      # unified build (classification + ndtictactoe + optional recommender)
+├── scripts/            # e.g. git-untrack-artifacts.sh
 ├── lib/
 │   ├── math/           # matrix ops, AST, differentiator, optimizers, augmentation
 │   └── ml/             # ML models and utilities
@@ -91,7 +93,7 @@ This codebase is primarily experiment-driven and educational/research oriented.
 - `libcurl`
 - Python 3.11 development headers/libs
 - NumPy include path available to Python
-- `matplotlibcpp.h` is vendored, but `nlohmann/json` single-header include path is expected by the Makefile/code (`json/single_include/...`)
+- `matplotlibcpp.h` is vendored. **CMake** recommender build fetches **nlohmann/json** via `FetchContent`. The **recommender `Makefile`** still expects a local `json/single_include/nlohmann/json.hpp` tree unless you build with CMake only.
 
 ### Notes
 
@@ -121,6 +123,26 @@ ctest --test-dir build --output-on-failure
 ```
 
 To skip tests (no network fetch for googletest): `cmake -B build -DCTORCH_BUILD_TESTS=OFF`.
+
+### Root `Makefile` (shortcuts)
+
+```bash
+make build    # cmake -B build && cmake --build build
+make test     # build + ctest
+make classification   # make -C experiments/classification
+make ndtictactoe     # make -C experiments/ndtictactoe
+```
+
+### Optional: recommender (CMake)
+
+Requires **libcurl**, **Python 3.9+** with **development headers**, and **NumPy** importable from that interpreter:
+
+```bash
+cmake -B build -DCTORCH_BUILD_RECOMMENDER=ON -DCMAKE_BUILD_TYPE=Release .
+cmake --build build --target recommender
+```
+
+If configure fails, read the message: missing `CURL`, `Python3`, or `numpy` is the usual cause.
 
 ### Make (per experiment)
 
@@ -204,9 +226,19 @@ This repository may contain large generated artifacts (especially RL model check
 - Most disk usage is under `experiments/ndtictactoe/models-and-data`
 - Recommender also includes large CSV datasets and many JSON outputs
 
-The root `.gitignore` ignores common build products and `*.model` checkpoints so new artifacts do not clutter commits. For a lightweight tree, prune existing checkpoints and old experiment outputs locally.
+The root `.gitignore` ignores common build products, `*.model` checkpoints, and the **`experiments/ndtictactoe/models-and-data/`** tree so new artifacts are not added by mistake.
 
-Prefer writing new checkpoints under a dedicated directory (for example a local `artifacts/` folder) and running experiments from the directory where relative data paths resolve.
+**If those paths were committed before `.gitignore`:** Git will keep tracking them until you remove them from the index (files stay on disk):
+
+```bash
+bash scripts/git-untrack-artifacts.sh
+git status   # review
+git commit -m "chore: stop tracking experiment artifacts"
+```
+
+That does **not** shrink old history; use `git filter-repo` (or similar) only if you need a smaller clone and are willing to rewrite public history.
+
+Prefer writing new checkpoints under a local **`artifacts/`** directory (tracked only via `.gitkeep`) and running experiments from the directory where relative data paths resolve.
 
 ## Known limitations
 
