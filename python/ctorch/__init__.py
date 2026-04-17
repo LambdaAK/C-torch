@@ -2,10 +2,45 @@ from __future__ import annotations
 
 import ctypes as ct
 import os
+from enum import IntEnum
 from pathlib import Path
 from typing import Sequence
 
-__all__ = ["Matrix", "KNN"]
+__all__ = [
+    "Matrix",
+    "KNN",
+    "LinearRegression",
+    "LogisticRegression",
+    "Perceptron",
+    "SVM",
+    "OptimType",
+    "DataAugmentationType",
+]
+
+
+class OptimType(IntEnum):
+    GD = 0
+    SGD = 1
+    ADAGRAD = 2
+    RMSPROP = 3
+    ADAM = 4
+    ADAMW = 5
+
+
+class DataAugmentationType(IntEnum):
+    NO_OP = 0
+    POLY_2 = 1
+    POLY_3 = 2
+    POLY_4 = 3
+    POLY_5 = 4
+    RFF = 5
+
+
+class KernelType(IntEnum):
+    LINEAR = 0
+    POLYNOMIAL_2 = 1
+    POLYNOMIAL_3 = 2
+    RADIAL_BASIS = 3
 
 
 def _candidate_library_paths() -> list[Path]:
@@ -110,6 +145,107 @@ _lib.ctorch_knn_get_k.restype = ct.c_bool
 _lib.ctorch_knn_set_k.argtypes = [ct.c_void_p, ct.c_size_t]
 _lib.ctorch_knn_set_k.restype = ct.c_bool
 
+_lib.ctorch_linear_regression_create.argtypes = [
+    ct.c_void_p,
+    ct.c_void_p,
+    ct.c_double,
+    ct.c_int,
+]
+_lib.ctorch_linear_regression_create.restype = ct.c_void_p
+_lib.ctorch_linear_regression_destroy.argtypes = [ct.c_void_p]
+_lib.ctorch_linear_regression_destroy.restype = None
+_lib.ctorch_linear_regression_predict.argtypes = [
+    ct.c_void_p,
+    ct.c_void_p,
+    ct.POINTER(ct.c_double),
+]
+_lib.ctorch_linear_regression_predict.restype = ct.c_bool
+_lib.ctorch_linear_regression_score.argtypes = [
+    ct.c_void_p,
+    ct.c_void_p,
+    ct.c_void_p,
+    ct.c_double,
+    ct.POINTER(ct.c_double),
+]
+_lib.ctorch_linear_regression_score.restype = ct.c_bool
+
+_lib.ctorch_logistic_regression_create.argtypes = [
+    ct.c_void_p,
+    ct.c_void_p,
+    ct.c_int,
+    ct.c_double,
+    ct.c_int,
+    ct.c_int,
+    ct.c_double,
+    ct.c_double,
+    ct.c_double,
+    ct.c_double,
+    ct.c_double,
+    ct.c_int,
+]
+_lib.ctorch_logistic_regression_create.restype = ct.c_void_p
+_lib.ctorch_logistic_regression_destroy.argtypes = [ct.c_void_p]
+_lib.ctorch_logistic_regression_destroy.restype = None
+_lib.ctorch_logistic_regression_predict.argtypes = [
+    ct.c_void_p,
+    ct.c_void_p,
+    ct.POINTER(ct.c_int),
+]
+_lib.ctorch_logistic_regression_predict.restype = ct.c_bool
+_lib.ctorch_logistic_regression_score.argtypes = [
+    ct.c_void_p,
+    ct.c_void_p,
+    ct.c_void_p,
+    ct.POINTER(ct.c_double),
+]
+_lib.ctorch_logistic_regression_score.restype = ct.c_bool
+
+_lib.ctorch_perceptron_create.argtypes = [
+    ct.c_void_p,
+    ct.c_void_p,
+    ct.c_int,
+]
+_lib.ctorch_perceptron_create.restype = ct.c_void_p
+_lib.ctorch_perceptron_destroy.argtypes = [ct.c_void_p]
+_lib.ctorch_perceptron_destroy.restype = None
+_lib.ctorch_perceptron_predict.argtypes = [
+    ct.c_void_p,
+    ct.c_void_p,
+    ct.POINTER(ct.c_int),
+]
+_lib.ctorch_perceptron_predict.restype = ct.c_bool
+_lib.ctorch_perceptron_score.argtypes = [
+    ct.c_void_p,
+    ct.c_void_p,
+    ct.c_void_p,
+    ct.POINTER(ct.c_double),
+]
+_lib.ctorch_perceptron_score.restype = ct.c_bool
+
+_lib.ctorch_svm_create.argtypes = [
+    ct.c_void_p,
+    ct.c_void_p,
+    ct.c_double,
+    ct.c_int,
+    ct.c_double,
+    ct.c_int,
+]
+_lib.ctorch_svm_create.restype = ct.c_void_p
+_lib.ctorch_svm_destroy.argtypes = [ct.c_void_p]
+_lib.ctorch_svm_destroy.restype = None
+_lib.ctorch_svm_predict.argtypes = [
+    ct.c_void_p,
+    ct.c_void_p,
+    ct.POINTER(ct.c_int),
+]
+_lib.ctorch_svm_predict.restype = ct.c_bool
+_lib.ctorch_svm_score.argtypes = [
+    ct.c_void_p,
+    ct.c_void_p,
+    ct.c_void_p,
+    ct.POINTER(ct.c_double),
+]
+_lib.ctorch_svm_score.restype = ct.c_bool
 
 def _last_error() -> str:
     raw = _lib.ctorch_last_error()
@@ -125,6 +261,15 @@ def _raise_last_error(prefix: str) -> RuntimeError:
 
 def _is_number(value: object) -> bool:
     return isinstance(value, (int, float))
+
+
+def _coerce_enum(value: int | IntEnum, enum_type: type[IntEnum], field_name: str) -> IntEnum:
+    if isinstance(value, enum_type):
+        return value
+    try:
+        return enum_type(int(value))
+    except Exception as exc:  # pragma: no cover - defensive typing gate
+        raise ValueError(f"invalid {field_name}: {value}") from exc
 
 
 def _coerce_2d(data: Sequence[object]) -> tuple[int, int, list[float]]:
@@ -189,7 +334,6 @@ class Matrix:
             self._ptr = ct.c_void_p(_ptr)
             return
 
-        # Allow Matrix(x) where x is a 1D/2D array-like payload.
         if data is None and cols is None and rows is not None and not _is_number(rows):
             data = rows
             rows = None
@@ -390,3 +534,234 @@ class KNN:
         if ptr:
             _lib.ctorch_knn_destroy(ptr)
             self._ptr = ct.c_void_p()
+
+
+class LinearRegression:
+    __slots__ = ("_ptr",)
+
+    def __init__(
+        self,
+        x_train: Matrix | Sequence[object],
+        y_train: Matrix | Sequence[object],
+        learning_rate: float,
+        max_iter: int,
+    ) -> None:
+        x_mat = _coerce_matrix(x_train)
+        y_mat = _coerce_row_vector(y_train)
+        ptr = _lib.ctorch_linear_regression_create(
+            x_mat._ptr,
+            y_mat._ptr,
+            float(learning_rate),
+            int(max_iter),
+        )
+        if not ptr:
+            raise _raise_last_error("LinearRegression(...) failed")
+        self._ptr = ct.c_void_p(ptr)
+
+    def predict(self, sample: Matrix | Sequence[object]) -> float:
+        sample_mat = _coerce_row_vector(sample)
+        out = ct.c_double()
+        ok = _lib.ctorch_linear_regression_predict(self._ptr, sample_mat._ptr, ct.byref(out))
+        if not ok:
+            raise _raise_last_error("LinearRegression.predict failed")
+        return float(out.value)
+
+    def score(
+        self,
+        x_test: Matrix | Sequence[object],
+        y_test: Matrix | Sequence[object],
+        threshold: float = 0.5,
+    ) -> float:
+        x_mat = _coerce_matrix(x_test)
+        y_mat = _coerce_row_vector(y_test)
+        out = ct.c_double()
+        ok = _lib.ctorch_linear_regression_score(
+            self._ptr,
+            x_mat._ptr,
+            y_mat._ptr,
+            float(threshold),
+            ct.byref(out),
+        )
+        if not ok:
+            raise _raise_last_error("LinearRegression.score failed")
+        return float(out.value)
+
+    def __del__(self) -> None:
+        ptr = getattr(self, "_ptr", None)
+        if ptr:
+            _lib.ctorch_linear_regression_destroy(ptr)
+            self._ptr = ct.c_void_p()
+
+
+class LogisticRegression:
+    __slots__ = ("_ptr",)
+
+    def __init__(
+        self,
+        x_train: Matrix | Sequence[object],
+        y_train: Matrix | Sequence[object],
+        optim_type: OptimType | int = OptimType.GD,
+        learning_rate: float = 0.001,
+        max_iter: int = 1000,
+        batch_size: int = 1,
+        beta1: float = 0.9,
+        beta2: float = 0.999,
+        epsilon: float = 1e-8,
+        rho: float = 0.99,
+        weight_decay: float = 0.0,
+        augmentation: DataAugmentationType | int = DataAugmentationType.NO_OP,
+    ) -> None:
+        x_mat = _coerce_matrix(x_train)
+        y_mat = _coerce_row_vector(y_train)
+        optim = _coerce_enum(optim_type, OptimType, "optim_type")
+        augment = _coerce_enum(augmentation, DataAugmentationType, "augmentation")
+
+        ptr = _lib.ctorch_logistic_regression_create(
+            x_mat._ptr,
+            y_mat._ptr,
+            int(optim),
+            float(learning_rate),
+            int(max_iter),
+            int(batch_size),
+            float(beta1),
+            float(beta2),
+            float(epsilon),
+            float(rho),
+            float(weight_decay),
+            int(augment),
+        )
+        if not ptr:
+            raise _raise_last_error("LogisticRegression(...) failed")
+        self._ptr = ct.c_void_p(ptr)
+
+    def predict(self, sample: Matrix | Sequence[object]) -> int:
+        sample_mat = _coerce_row_vector(sample)
+        out = ct.c_int()
+        ok = _lib.ctorch_logistic_regression_predict(self._ptr, sample_mat._ptr, ct.byref(out))
+        if not ok:
+            raise _raise_last_error("LogisticRegression.predict failed")
+        return int(out.value)
+
+    def score(
+        self,
+        x_test: Matrix | Sequence[object],
+        y_test: Matrix | Sequence[object],
+    ) -> float:
+        x_mat = _coerce_matrix(x_test)
+        y_mat = _coerce_row_vector(y_test)
+        out = ct.c_double()
+        ok = _lib.ctorch_logistic_regression_score(
+            self._ptr,
+            x_mat._ptr,
+            y_mat._ptr,
+            ct.byref(out),
+        )
+        if not ok:
+            raise _raise_last_error("LogisticRegression.score failed")
+        return float(out.value)
+
+    def __del__(self) -> None:
+        ptr = getattr(self, "_ptr", None)
+        if ptr:
+            _lib.ctorch_logistic_regression_destroy(ptr)
+            self._ptr = ct.c_void_p()
+
+
+class Perceptron:
+    __slots__ = ("_ptr",)
+
+    def __init__(
+        self,
+        x_train: Matrix | Sequence[object],
+        y_train: Matrix | Sequence[object],
+        epochs: int = 300,
+    ) -> None:
+        x_mat = _coerce_matrix(x_train)
+        y_mat = _coerce_row_vector(y_train)
+        ptr = _lib.ctorch_perceptron_create(x_mat._ptr, y_mat._ptr, int(epochs))
+        if not ptr:
+            raise _raise_last_error("Perceptron(...) failed")
+        self._ptr = ct.c_void_p(ptr)
+
+    def predict(self, sample: Matrix | Sequence[object]) -> int:
+        sample_mat = _coerce_row_vector(sample)
+        out = ct.c_int()
+        ok = _lib.ctorch_perceptron_predict(self._ptr, sample_mat._ptr, ct.byref(out))
+        if not ok:
+            raise _raise_last_error("Perceptron.predict failed")
+        return int(out.value)
+
+    def score(
+        self,
+        x_test: Matrix | Sequence[object],
+        y_test: Matrix | Sequence[object],
+    ) -> float:
+        x_mat = _coerce_matrix(x_test)
+        y_mat = _coerce_row_vector(y_test)
+        out = ct.c_double()
+        ok = _lib.ctorch_perceptron_score(self._ptr, x_mat._ptr, y_mat._ptr, ct.byref(out))
+        if not ok:
+            raise _raise_last_error("Perceptron.score failed")
+        return float(out.value)
+
+    def __del__(self) -> None:
+        ptr = getattr(self, "_ptr", None)
+        if ptr:
+            _lib.ctorch_perceptron_destroy(ptr)
+            self._ptr = ct.c_void_p()
+
+
+class SVM:
+    __slots__ = ("_ptr",)
+
+    def __init__(
+        self,
+        x_train: Matrix | Sequence[object],
+        y_train: Matrix | Sequence[object],
+        learning_rate: float,
+        max_iter: int,
+        c_value: float,
+        augmentation: DataAugmentationType | int = DataAugmentationType.NO_OP,
+    ) -> None:
+        x_mat = _coerce_matrix(x_train)
+        y_mat = _coerce_row_vector(y_train)
+        augment = _coerce_enum(augmentation, DataAugmentationType, "augmentation")
+        ptr = _lib.ctorch_svm_create(
+            x_mat._ptr,
+            y_mat._ptr,
+            float(learning_rate),
+            int(max_iter),
+            float(c_value),
+            int(augment),
+        )
+        if not ptr:
+            raise _raise_last_error("SVM(...) failed")
+        self._ptr = ct.c_void_p(ptr)
+
+    def predict(self, sample: Matrix | Sequence[object]) -> int:
+        sample_mat = _coerce_row_vector(sample)
+        out = ct.c_int()
+        ok = _lib.ctorch_svm_predict(self._ptr, sample_mat._ptr, ct.byref(out))
+        if not ok:
+            raise _raise_last_error("SVM.predict failed")
+        return int(out.value)
+
+    def score(
+        self,
+        x_test: Matrix | Sequence[object],
+        y_test: Matrix | Sequence[object],
+    ) -> float:
+        x_mat = _coerce_matrix(x_test)
+        y_mat = _coerce_row_vector(y_test)
+        out = ct.c_double()
+        ok = _lib.ctorch_svm_score(self._ptr, x_mat._ptr, y_mat._ptr, ct.byref(out))
+        if not ok:
+            raise _raise_last_error("SVM.score failed")
+        return float(out.value)
+
+    def __del__(self) -> None:
+        ptr = getattr(self, "_ptr", None)
+        if ptr:
+            _lib.ctorch_svm_destroy(ptr)
+            self._ptr = ct.c_void_p()
+

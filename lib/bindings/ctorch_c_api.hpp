@@ -12,6 +12,45 @@ extern "C" {
 
 typedef struct CTorchMatrix CTorchMatrix;
 typedef struct CTorchKNN CTorchKNN;
+typedef struct CTorchLinearRegression CTorchLinearRegression;
+typedef struct CTorchLogisticRegression CTorchLogisticRegression;
+typedef struct CTorchPerceptron CTorchPerceptron;
+typedef struct CTorchSVM CTorchSVM;
+typedef struct CTorchKernelSVM CTorchKernelSVM;
+typedef struct CTorchRandomFourierSVM CTorchRandomFourierSVM;
+typedef struct CTorchGaussianNB CTorchGaussianNB;
+typedef struct CTorchKMeans CTorchKMeans;
+typedef struct CTorchPCA CTorchPCA;
+typedef struct CTorchMAB CTorchMAB;
+typedef struct CTorchUCB CTorchUCB;
+
+typedef enum CTorchOptimType
+{
+    CTORCH_OPTIM_GD = 0,
+    CTORCH_OPTIM_SGD = 1,
+    CTORCH_OPTIM_ADAGRAD = 2,
+    CTORCH_OPTIM_RMSPROP = 3,
+    CTORCH_OPTIM_ADAM = 4,
+    CTORCH_OPTIM_ADAMW = 5
+} CTorchOptimType;
+
+typedef enum CTorchDataAugmentationType
+{
+    CTORCH_AUGMENT_NO_OP = 0,
+    CTORCH_AUGMENT_POLY_2 = 1,
+    CTORCH_AUGMENT_POLY_3 = 2,
+    CTORCH_AUGMENT_POLY_4 = 3,
+    CTORCH_AUGMENT_POLY_5 = 4,
+    CTORCH_AUGMENT_RFF = 5
+} CTorchDataAugmentationType;
+
+typedef enum CTorchKernelType
+{
+    CTORCH_KERNEL_LINEAR = 0,
+    CTORCH_KERNEL_POLYNOMIAL_2 = 1,
+    CTORCH_KERNEL_POLYNOMIAL_3 = 2,
+    CTORCH_KERNEL_RADIAL_BASIS = 3
+} CTorchKernelType;
 
 /**
  * Returns the last error message produced by the C API on the current thread.
@@ -64,9 +103,82 @@ bool ctorch_knn_score(CTorchKNN* model, const CTorchMatrix* x_test, const CTorch
 bool ctorch_knn_get_k(const CTorchKNN* model, size_t* out_k);
 bool ctorch_knn_set_k(CTorchKNN* model, size_t new_k);
 
+CTorchLinearRegression* ctorch_linear_regression_create(
+    const CTorchMatrix* x_train,
+    const CTorchMatrix* y_train,
+    double learning_rate,
+    int max_iter);
+void ctorch_linear_regression_destroy(CTorchLinearRegression* model);
+bool ctorch_linear_regression_predict(
+    const CTorchLinearRegression* model,
+    const CTorchMatrix* sample,
+    double* out_value);
+bool ctorch_linear_regression_score(
+    const CTorchLinearRegression* model,
+    const CTorchMatrix* x_test,
+    const CTorchMatrix* y_test,
+    double threshold,
+    double* out_score);
+
+CTorchLogisticRegression* ctorch_logistic_regression_create(
+    const CTorchMatrix* x_train,
+    const CTorchMatrix* y_train,
+    CTorchOptimType optim_type,
+    double learning_rate,
+    int max_iter,
+    int batch_size,
+    double beta1,
+    double beta2,
+    double epsilon,
+    double rho,
+    double weight_decay,
+    CTorchDataAugmentationType augmentation_type);
+void ctorch_logistic_regression_destroy(CTorchLogisticRegression* model);
+bool ctorch_logistic_regression_predict(
+    const CTorchLogisticRegression* model,
+    const CTorchMatrix* sample,
+    int* out_label);
+bool ctorch_logistic_regression_score(
+    const CTorchLogisticRegression* model,
+    const CTorchMatrix* x_test,
+    const CTorchMatrix* y_test,
+    double* out_score);
+
+CTorchPerceptron* ctorch_perceptron_create(
+    const CTorchMatrix* x_train,
+    const CTorchMatrix* y_train,
+    int epochs);
+void ctorch_perceptron_destroy(CTorchPerceptron* model);
+bool ctorch_perceptron_predict(
+    const CTorchPerceptron* model,
+    const CTorchMatrix* sample,
+    int* out_label);
+bool ctorch_perceptron_score(
+    const CTorchPerceptron* model,
+    const CTorchMatrix* x_test,
+    const CTorchMatrix* y_test,
+    double* out_score);
+
+CTorchSVM* ctorch_svm_create(
+    const CTorchMatrix* x_train,
+    const CTorchMatrix* y_train,
+    double learning_rate,
+    int max_iter,
+    double c_value,
+    CTorchDataAugmentationType augmentation_type);
+void ctorch_svm_destroy(CTorchSVM* model);
+bool ctorch_svm_predict(
+    const CTorchSVM* model,
+    const CTorchMatrix* sample,
+    int* out_label);
+bool ctorch_svm_score(
+    const CTorchSVM* model,
+    const CTorchMatrix* x_test,
+    const CTorchMatrix* y_test,
+    double* out_score);
+
 #ifdef __cplusplus
 } // extern "C"
 #endif
 
 #endif // CTORCH_C_API_HPP
-
