@@ -29,11 +29,27 @@ set(CTORCH_SOURCES
 )
 
 add_library(ctorch STATIC ${CTORCH_SOURCES})
+set_target_properties(ctorch PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_include_directories(ctorch PUBLIC
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/lib>
 )
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
     target_compile_options(ctorch PRIVATE -Wall -Wextra)
+endif()
+
+option(CTORCH_BUILD_PYTHON_BINDINGS "Build Python ctypes bindings (Matrix + KNN pilot)" OFF)
+if(CTORCH_BUILD_PYTHON_BINDINGS)
+    add_library(ctorch_c SHARED
+        lib/bindings/ctorch_c_api.cpp
+    )
+    target_include_directories(ctorch_c PRIVATE
+        ${CMAKE_SOURCE_DIR}/lib
+    )
+    target_link_libraries(ctorch_c PRIVATE ctorch)
+    set_target_properties(ctorch_c PROPERTIES OUTPUT_NAME "ctorch_c")
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
+        target_compile_options(ctorch_c PRIVATE -Wall -Wextra)
+    endif()
 endif()
 
 add_executable(classification experiments/classification/main.cpp)
