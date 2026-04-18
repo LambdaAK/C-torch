@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import ctypes as ct
 import os
+from dataclasses import dataclass
 from enum import IntEnum
 from pathlib import Path
-from typing import Sequence
+from typing import Any, Mapping, Sequence
 
 __all__ = [
     "Matrix",
@@ -26,6 +27,16 @@ __all__ = [
     "DataAugmentationType",
     "KernelType",
     "NNOptimType",
+    "Expr",
+    "SymbolicLoss",
+    "symbolic_optimize",
+    "encode_regression_label",
+    "regression_label_row",
+    "LinearProgramSense",
+    "LinearProgramResult",
+    "solve_linear_program",
+    "QuadraticProgramResult",
+    "solve_quadratic_program",
 ]
 
 
@@ -60,6 +71,11 @@ class NNOptimType(IntEnum):
     RMSPROP = 2
     ADAM = 3
     ADAMW = 4
+
+
+class LinearProgramSense(IntEnum):
+    MINIMIZE = 0
+    MAXIMIZE = 1
 
 
 def _candidate_library_paths() -> list[Path]:
@@ -421,6 +437,142 @@ _lib.ctorch_nn_optimizer_zero_grad.restype = ct.c_bool
 _lib.ctorch_nn_optimizer_step.argtypes = [ct.c_void_p]
 _lib.ctorch_nn_optimizer_step.restype = ct.c_bool
 
+_lib.ctorch_matrix_eye.argtypes = [ct.c_size_t]
+_lib.ctorch_matrix_eye.restype = ct.c_void_p
+_lib.ctorch_matrix_row.argtypes = [ct.c_void_p, ct.c_size_t]
+_lib.ctorch_matrix_row.restype = ct.c_void_p
+_lib.ctorch_matrix_l2_norm_cols.argtypes = [ct.c_void_p]
+_lib.ctorch_matrix_l2_norm_cols.restype = ct.c_void_p
+_lib.ctorch_matrix_center_cols.argtypes = [ct.c_void_p]
+_lib.ctorch_matrix_center_cols.restype = ct.c_void_p
+_lib.ctorch_matrix_euclidean_distance.argtypes = [ct.c_void_p, ct.c_void_p, ct.POINTER(ct.c_double)]
+_lib.ctorch_matrix_euclidean_distance.restype = ct.c_bool
+_lib.ctorch_matrix_inner_product.argtypes = [ct.c_void_p, ct.c_void_p, ct.POINTER(ct.c_double)]
+_lib.ctorch_matrix_inner_product.restype = ct.c_bool
+_lib.ctorch_matrix_relu.argtypes = [ct.c_void_p]
+_lib.ctorch_matrix_relu.restype = ct.c_void_p
+_lib.ctorch_matrix_relu_deriv.argtypes = [ct.c_void_p]
+_lib.ctorch_matrix_relu_deriv.restype = ct.c_void_p
+_lib.ctorch_matrix_sigmoid.argtypes = [ct.c_void_p]
+_lib.ctorch_matrix_sigmoid.restype = ct.c_void_p
+_lib.ctorch_matrix_sigmoid_deriv.argtypes = [ct.c_void_p]
+_lib.ctorch_matrix_sigmoid_deriv.restype = ct.c_void_p
+_lib.ctorch_matrix_tanh.argtypes = [ct.c_void_p]
+_lib.ctorch_matrix_tanh.restype = ct.c_void_p
+_lib.ctorch_matrix_tanh_deriv.argtypes = [ct.c_void_p]
+_lib.ctorch_matrix_tanh_deriv.restype = ct.c_void_p
+_lib.ctorch_matrix_elm_wise_product.argtypes = [ct.c_void_p, ct.c_void_p]
+_lib.ctorch_matrix_elm_wise_product.restype = ct.c_void_p
+
+_lib.ctorch_expr_num.argtypes = [ct.c_double]
+_lib.ctorch_expr_num.restype = ct.c_void_p
+_lib.ctorch_expr_var.argtypes = [ct.c_char_p]
+_lib.ctorch_expr_var.restype = ct.c_void_p
+for _name in (
+    "ctorch_expr_add",
+    "ctorch_expr_sub",
+    "ctorch_expr_mul",
+    "ctorch_expr_div",
+    "ctorch_expr_pow",
+):
+    getattr(_lib, _name).argtypes = [ct.c_void_p, ct.c_void_p]
+    getattr(_lib, _name).restype = ct.c_void_p
+_lib.ctorch_expr_neg.argtypes = [ct.c_void_p]
+_lib.ctorch_expr_neg.restype = ct.c_void_p
+for _name in (
+    "ctorch_expr_exp",
+    "ctorch_expr_log",
+    "ctorch_expr_sqrt",
+    "ctorch_expr_abs",
+    "ctorch_expr_sigmoid",
+):
+    getattr(_lib, _name).argtypes = [ct.c_void_p]
+    getattr(_lib, _name).restype = ct.c_void_p
+_lib.ctorch_expr_max.argtypes = [ct.c_void_p, ct.c_void_p]
+_lib.ctorch_expr_max.restype = ct.c_void_p
+_lib.ctorch_expr_min.argtypes = [ct.c_void_p, ct.c_void_p]
+_lib.ctorch_expr_min.restype = ct.c_void_p
+_lib.ctorch_expr_destroy.argtypes = [ct.c_void_p]
+_lib.ctorch_expr_destroy.restype = None
+_lib.ctorch_expr_to_string.argtypes = [ct.c_void_p]
+_lib.ctorch_expr_to_string.restype = ct.c_char_p
+_lib.ctorch_expr_simplify.argtypes = [ct.c_void_p]
+_lib.ctorch_expr_simplify.restype = ct.c_void_p
+_lib.ctorch_expr_substitute.argtypes = [ct.c_void_p, ct.c_char_p, ct.c_void_p]
+_lib.ctorch_expr_substitute.restype = ct.c_void_p
+_lib.ctorch_expr_variable_count.argtypes = [ct.c_void_p]
+_lib.ctorch_expr_variable_count.restype = ct.c_size_t
+_lib.ctorch_expr_variable_name.argtypes = [ct.c_void_p, ct.c_size_t, ct.c_char_p, ct.c_size_t]
+_lib.ctorch_expr_variable_name.restype = ct.c_bool
+_lib.ctorch_expr_evaluate.argtypes = [ct.c_void_p, ct.c_size_t, ct.POINTER(ct.c_char_p), ct.POINTER(ct.c_double), ct.POINTER(ct.c_double)]
+_lib.ctorch_expr_evaluate.restype = ct.c_bool
+_lib.ctorch_expr_gradient.argtypes = [ct.c_void_p, ct.c_size_t, ct.POINTER(ct.c_char_p), ct.POINTER(ct.c_double), ct.POINTER(ct.c_double)]
+_lib.ctorch_expr_gradient.restype = ct.c_bool
+
+_lib.ctorch_loss_regression_mse_create.argtypes = [ct.c_int, ct.c_double]
+_lib.ctorch_loss_regression_mse_create.restype = ct.c_void_p
+_lib.ctorch_loss_logistic_create.argtypes = [ct.c_int]
+_lib.ctorch_loss_logistic_create.restype = ct.c_void_p
+_lib.ctorch_loss_destroy.argtypes = [ct.c_void_p]
+_lib.ctorch_loss_destroy.restype = None
+
+_lib.ctorch_symbolic_optimize.argtypes = [
+    ct.c_void_p,
+    ct.c_void_p,
+    ct.c_void_p,
+    ct.c_int,
+    ct.c_double,
+    ct.c_int,
+    ct.c_int,
+    ct.c_double,
+    ct.c_double,
+    ct.c_double,
+    ct.c_double,
+    ct.c_double,
+]
+_lib.ctorch_symbolic_optimize.restype = ct.c_void_p
+_lib.ctorch_param_map_destroy.argtypes = [ct.c_void_p]
+_lib.ctorch_param_map_destroy.restype = None
+_lib.ctorch_param_map_size.argtypes = [ct.c_void_p]
+_lib.ctorch_param_map_size.restype = ct.c_size_t
+_lib.ctorch_param_map_get.argtypes = [ct.c_void_p, ct.c_size_t, ct.c_char_p, ct.c_size_t, ct.POINTER(ct.c_double)]
+_lib.ctorch_param_map_get.restype = ct.c_bool
+
+_lib.ctorch_linear_program_solve.argtypes = [
+    ct.c_void_p,
+    ct.POINTER(ct.c_double),
+    ct.c_size_t,
+    ct.POINTER(ct.c_double),
+    ct.c_size_t,
+    ct.c_int,
+    ct.POINTER(ct.c_double),
+    ct.c_size_t,
+    ct.POINTER(ct.c_double),
+    ct.POINTER(ct.c_bool),
+    ct.POINTER(ct.c_bool),
+    ct.POINTER(ct.c_int),
+]
+_lib.ctorch_linear_program_solve.restype = ct.c_bool
+
+_lib.ctorch_quadratic_program_solve.argtypes = [
+    ct.c_void_p,
+    ct.POINTER(ct.c_double),
+    ct.c_size_t,
+    ct.POINTER(ct.c_double),
+    ct.POINTER(ct.c_double),
+    ct.POINTER(ct.c_double),
+    ct.c_size_t,
+    ct.c_double,
+    ct.POINTER(ct.c_double),
+    ct.c_size_t,
+    ct.POINTER(ct.c_double),
+    ct.c_size_t,
+    ct.POINTER(ct.c_double),
+    ct.POINTER(ct.c_bool),
+    ct.POINTER(ct.c_int),
+]
+_lib.ctorch_quadratic_program_solve.restype = ct.c_bool
+
 
 def _last_error() -> str:
     raw = _lib.ctorch_last_error()
@@ -445,6 +597,12 @@ def _coerce_enum(value: int | IntEnum, enum_type: type[IntEnum], field_name: str
         return enum_type(int(value))
     except Exception as exc:  # pragma: no cover - defensive typing gate
         raise ValueError(f"invalid {field_name}: {value}") from exc
+
+
+def _c_str_array(strings: Sequence[str]) -> tuple[Any, list[bytes]]:
+    encoded = [s.encode("utf-8") for s in strings]
+    arr = (ct.c_char_p * len(encoded))(*encoded)
+    return arr, encoded
 
 
 def _coerce_2d(data: Sequence[object]) -> tuple[int, int, list[float]]:
@@ -602,6 +760,90 @@ class Matrix:
                 idx += 1
             out.append(row_values)
         return out
+
+    @classmethod
+    def eye(cls, dim: int) -> Matrix:
+        ptr = _lib.ctorch_matrix_eye(ct.c_size_t(int(dim)))
+        if not ptr:
+            raise _raise_last_error("Matrix.eye failed")
+        return cls(_ptr=ptr)
+
+    def row(self, index: int) -> Matrix:
+        ptr = _lib.ctorch_matrix_row(self._ptr, ct.c_size_t(int(index)))
+        if not ptr:
+            raise _raise_last_error("Matrix.row failed")
+        return Matrix(_ptr=ptr)
+
+    def l2_norm_cols(self) -> Matrix:
+        ptr = _lib.ctorch_matrix_l2_norm_cols(self._ptr)
+        if not ptr:
+            raise _raise_last_error("Matrix.l2_norm_cols failed")
+        return Matrix(_ptr=ptr)
+
+    def center_cols(self) -> Matrix:
+        ptr = _lib.ctorch_matrix_center_cols(self._ptr)
+        if not ptr:
+            raise _raise_last_error("Matrix.center_cols failed")
+        return Matrix(_ptr=ptr)
+
+    def euclidean_distance(self, other: Matrix | Sequence[object]) -> float:
+        rhs = _coerce_matrix(other)
+        out = ct.c_double()
+        ok = _lib.ctorch_matrix_euclidean_distance(self._ptr, rhs._ptr, ct.byref(out))
+        if not ok:
+            raise _raise_last_error("Matrix.euclidean_distance failed")
+        return float(out.value)
+
+    def inner_product(self, other: Matrix | Sequence[object]) -> float:
+        rhs = _coerce_matrix(other)
+        out = ct.c_double()
+        ok = _lib.ctorch_matrix_inner_product(self._ptr, rhs._ptr, ct.byref(out))
+        if not ok:
+            raise _raise_last_error("Matrix.inner_product failed")
+        return float(out.value)
+
+    def relu(self) -> Matrix:
+        ptr = _lib.ctorch_matrix_relu(self._ptr)
+        if not ptr:
+            raise _raise_last_error("Matrix.relu failed")
+        return Matrix(_ptr=ptr)
+
+    def relu_deriv(self) -> Matrix:
+        ptr = _lib.ctorch_matrix_relu_deriv(self._ptr)
+        if not ptr:
+            raise _raise_last_error("Matrix.relu_deriv failed")
+        return Matrix(_ptr=ptr)
+
+    def sigmoid(self) -> Matrix:
+        ptr = _lib.ctorch_matrix_sigmoid(self._ptr)
+        if not ptr:
+            raise _raise_last_error("Matrix.sigmoid failed")
+        return Matrix(_ptr=ptr)
+
+    def sigmoid_deriv(self) -> Matrix:
+        ptr = _lib.ctorch_matrix_sigmoid_deriv(self._ptr)
+        if not ptr:
+            raise _raise_last_error("Matrix.sigmoid_deriv failed")
+        return Matrix(_ptr=ptr)
+
+    def tanh(self) -> Matrix:
+        ptr = _lib.ctorch_matrix_tanh(self._ptr)
+        if not ptr:
+            raise _raise_last_error("Matrix.tanh failed")
+        return Matrix(_ptr=ptr)
+
+    def tanh_deriv(self) -> Matrix:
+        ptr = _lib.ctorch_matrix_tanh_deriv(self._ptr)
+        if not ptr:
+            raise _raise_last_error("Matrix.tanh_deriv failed")
+        return Matrix(_ptr=ptr)
+
+    def elementwise_mul(self, other: Matrix | Sequence[object]) -> Matrix:
+        rhs = _coerce_matrix(other)
+        ptr = _lib.ctorch_matrix_elm_wise_product(self._ptr, rhs._ptr)
+        if not ptr:
+            raise _raise_last_error("Matrix.elementwise_mul failed")
+        return Matrix(_ptr=ptr)
 
     def __getitem__(self, key: tuple[int, int]) -> float:
         row, col = key
@@ -1355,3 +1597,351 @@ class NNOptimizer:
         if ptr:
             _lib.ctorch_nn_optimizer_destroy(ptr)
             self._ptr = ct.c_void_p()
+
+
+def encode_regression_label(y: float) -> int:
+    """Encode a real-valued regression target for :class:`SymbolicLoss` MSE (internal scale 1e4)."""
+    return int(round(float(y) * 10000.0))
+
+
+def regression_label_row(values: Sequence[float]) -> Matrix:
+    """Build a ``1 × N`` label row matrix for regression MSE training from real targets."""
+    enc = [encode_regression_label(v) for v in values]
+    return Matrix([enc])
+
+
+class Expr:
+    """Symbolic scalar expression (AST). Use ``Expr.num`` / ``Expr.var`` and Python operators."""
+
+    __slots__ = ("_ptr",)
+
+    def __init__(self, ptr: int) -> None:
+        self._ptr = ct.c_void_p(ptr)
+
+    @staticmethod
+    def num(value: float) -> Expr:
+        ptr = _lib.ctorch_expr_num(float(value))
+        if not ptr:
+            raise _raise_last_error("Expr.num failed")
+        return Expr(ptr)
+
+    @staticmethod
+    def var(name: str) -> Expr:
+        b = name.encode("utf-8")
+        ptr = _lib.ctorch_expr_var(b)
+        if not ptr:
+            raise _raise_last_error("Expr.var failed")
+        return Expr(ptr)
+
+    @staticmethod
+    def _bin(op: Any, lhs: Expr, rhs: Expr) -> Expr:
+        ptr = op(lhs._ptr, rhs._ptr)
+        if not ptr:
+            raise _raise_last_error("expression build failed")
+        return Expr(ptr)
+
+    def __add__(self, other: Expr) -> Expr:
+        return Expr._bin(_lib.ctorch_expr_add, self, other)
+
+    def __sub__(self, other: Expr) -> Expr:
+        return Expr._bin(_lib.ctorch_expr_sub, self, other)
+
+    def __mul__(self, other: Expr) -> Expr:
+        return Expr._bin(_lib.ctorch_expr_mul, self, other)
+
+    def __truediv__(self, other: Expr) -> Expr:
+        return Expr._bin(_lib.ctorch_expr_div, self, other)
+
+    def __pow__(self, other: Expr) -> Expr:
+        return Expr._bin(_lib.ctorch_expr_pow, self, other)
+
+    def __neg__(self) -> Expr:
+        ptr = _lib.ctorch_expr_neg(self._ptr)
+        if not ptr:
+            raise _raise_last_error("Expr.__neg__ failed")
+        return Expr(ptr)
+
+    def exp(self) -> Expr:
+        ptr = _lib.ctorch_expr_exp(self._ptr)
+        if not ptr:
+            raise _raise_last_error("Expr.exp failed")
+        return Expr(ptr)
+
+    def log(self) -> Expr:
+        ptr = _lib.ctorch_expr_log(self._ptr)
+        if not ptr:
+            raise _raise_last_error("Expr.log failed")
+        return Expr(ptr)
+
+    def sqrt(self) -> Expr:
+        ptr = _lib.ctorch_expr_sqrt(self._ptr)
+        if not ptr:
+            raise _raise_last_error("Expr.sqrt failed")
+        return Expr(ptr)
+
+    def abs(self) -> Expr:
+        ptr = _lib.ctorch_expr_abs(self._ptr)
+        if not ptr:
+            raise _raise_last_error("Expr.abs failed")
+        return Expr(ptr)
+
+    def sigmoid(self) -> Expr:
+        ptr = _lib.ctorch_expr_sigmoid(self._ptr)
+        if not ptr:
+            raise _raise_last_error("Expr.sigmoid failed")
+        return Expr(ptr)
+
+    def max(self, other: Expr) -> Expr:
+        return Expr._bin(_lib.ctorch_expr_max, self, other)
+
+    def min(self, other: Expr) -> Expr:
+        return Expr._bin(_lib.ctorch_expr_min, self, other)
+
+    def simplify(self) -> Expr:
+        ptr = _lib.ctorch_expr_simplify(self._ptr)
+        if not ptr:
+            raise _raise_last_error("Expr.simplify failed")
+        return Expr(ptr)
+
+    def substitute(self, name: str, replacement: Expr) -> Expr:
+        nb = name.encode("utf-8")
+        ptr = _lib.ctorch_expr_substitute(self._ptr, nb, replacement._ptr)
+        if not ptr:
+            raise _raise_last_error("Expr.substitute failed")
+        return Expr(ptr)
+
+    def variables(self) -> list[str]:
+        n = int(_lib.ctorch_expr_variable_count(self._ptr))
+        names: list[str] = []
+        buf = ct.create_string_buffer(256)
+        for i in range(n):
+            ok = _lib.ctorch_expr_variable_name(self._ptr, ct.c_size_t(i), buf, ct.c_size_t(256))
+            if not ok:
+                raise _raise_last_error("Expr.variables failed")
+            names.append(buf.value.decode("utf-8"))
+        return names
+
+    def evaluate(self, bindings: Mapping[str, float]) -> float:
+        keys = list(bindings.keys())
+        arr, _keep = _c_str_array(keys)
+        vals = (ct.c_double * len(keys))(*[float(bindings[k]) for k in keys])
+        out = ct.c_double()
+        ok = _lib.ctorch_expr_evaluate(self._ptr, ct.c_size_t(len(keys)), arr, vals, ct.byref(out))
+        if not ok:
+            raise _raise_last_error("Expr.evaluate failed")
+        return float(out.value)
+
+    def gradient(self, bindings: Mapping[str, float]) -> dict[str, float]:
+        keys = list(bindings.keys())
+        arr, _keep = _c_str_array(keys)
+        vals = (ct.c_double * len(keys))(*[float(bindings[k]) for k in keys])
+        outs = (ct.c_double * len(keys))()
+        ok = _lib.ctorch_expr_gradient(self._ptr, ct.c_size_t(len(keys)), arr, vals, outs)
+        if not ok:
+            raise _raise_last_error("Expr.gradient failed")
+        return {keys[i]: float(outs[i]) for i in range(len(keys))}
+
+    def __str__(self) -> str:
+        raw = _lib.ctorch_expr_to_string(self._ptr)
+        if raw is None:
+            return "<Expr ?>"
+        return raw.decode("utf-8", errors="replace")
+
+    def __repr__(self) -> str:
+        return f"Expr({str(self)!r})"
+
+    def __del__(self) -> None:
+        ptr = getattr(self, "_ptr", None)
+        if ptr:
+            _lib.ctorch_expr_destroy(ptr)
+            self._ptr = ct.c_void_p()
+
+
+class SymbolicLoss:
+    """Symbolic supervised loss for :func:`symbolic_optimize` (linear regression MSE or logistic)."""
+
+    __slots__ = ("_ptr",)
+
+    def __init__(self, ptr: int) -> None:
+        self._ptr = ct.c_void_p(ptr)
+
+    @staticmethod
+    def regression_mse(feature_dim: int, *, l2: float = 0.0) -> SymbolicLoss:
+        ptr = _lib.ctorch_loss_regression_mse_create(int(feature_dim), float(l2))
+        if not ptr:
+            raise _raise_last_error("SymbolicLoss.regression_mse failed")
+        return SymbolicLoss(ptr)
+
+    @staticmethod
+    def logistic(feature_dim: int) -> SymbolicLoss:
+        ptr = _lib.ctorch_loss_logistic_create(int(feature_dim))
+        if not ptr:
+            raise _raise_last_error("SymbolicLoss.logistic failed")
+        return SymbolicLoss(ptr)
+
+    def __del__(self) -> None:
+        ptr = getattr(self, "_ptr", None)
+        if ptr:
+            _lib.ctorch_loss_destroy(ptr)
+            self._ptr = ct.c_void_p()
+
+
+def symbolic_optimize(
+    loss: SymbolicLoss,
+    x_train: Matrix,
+    y_train: Matrix,
+    *,
+    optim_type: OptimType | int = OptimType.ADAM,
+    learning_rate: float = 0.05,
+    max_iter: int = 800,
+    batch_size: int = 32,
+    beta1: float = 0.9,
+    beta2: float = 0.999,
+    epsilon: float = 1e-8,
+    rho: float = 0.99,
+    weight_decay: float = 0.0,
+) -> dict[str, float]:
+    """Fit weights ``w0..w{d-1}`` and bias ``b`` using the math stack optimizers."""
+    ot = _coerce_enum(optim_type, OptimType, "optim_type")
+    pm = _lib.ctorch_symbolic_optimize(
+        loss._ptr,
+        x_train._ptr,
+        y_train._ptr,
+        int(ot),
+        float(learning_rate),
+        int(max_iter),
+        int(batch_size),
+        float(beta1),
+        float(beta2),
+        float(epsilon),
+        float(rho),
+        float(weight_decay),
+    )
+    if not pm:
+        raise _raise_last_error("symbolic_optimize failed")
+    try:
+        n = int(_lib.ctorch_param_map_size(pm))
+        out: dict[str, float] = {}
+        buf = ct.create_string_buffer(256)
+        for i in range(n):
+            v = ct.c_double()
+            ok = _lib.ctorch_param_map_get(pm, ct.c_size_t(i), buf, ct.c_size_t(256), ct.byref(v))
+            if not ok:
+                raise _raise_last_error("symbolic_optimize readback failed")
+            out[buf.value.decode("utf-8")] = float(v.value)
+        return out
+    finally:
+        _lib.ctorch_param_map_destroy(pm)
+
+
+@dataclass(frozen=True)
+class LinearProgramResult:
+    solution: list[float]
+    objective: float
+    optimal: bool
+    unbounded: bool
+    iterations: int
+
+
+def solve_linear_program(
+    a: Matrix,
+    b: Sequence[float],
+    c: Sequence[float],
+    *,
+    sense: LinearProgramSense | int = LinearProgramSense.MINIMIZE,
+) -> LinearProgramResult:
+    """Solve ``min/max cᵀx`` s.t. ``A x ≤ b``, ``x ≥ 0`` (simplex backend)."""
+    rows, cols = a.shape
+    if len(b) != rows or len(c) != cols:
+        raise ValueError("A shape must align with len(b) and len(c)")
+    b_arr = (ct.c_double * len(b))(*[float(x) for x in b])
+    c_arr = (ct.c_double * len(c))(*[float(x) for x in c])
+    sol = (ct.c_double * cols)()
+    obj = ct.c_double()
+    opt = ct.c_bool()
+    unb = ct.c_bool()
+    iters = ct.c_int()
+    s = _coerce_enum(sense, LinearProgramSense, "sense")
+    ok = _lib.ctorch_linear_program_solve(
+        a._ptr,
+        b_arr,
+        ct.c_size_t(len(b)),
+        c_arr,
+        ct.c_size_t(len(c)),
+        int(s),
+        sol,
+        ct.c_size_t(cols),
+        ct.byref(obj),
+        ct.byref(opt),
+        ct.byref(unb),
+        ct.byref(iters),
+    )
+    if not ok:
+        raise _raise_last_error("solve_linear_program failed")
+    return LinearProgramResult(
+        solution=[float(sol[i]) for i in range(cols)],
+        objective=float(obj.value),
+        optimal=bool(opt.value),
+        unbounded=bool(unb.value),
+        iterations=int(iters.value),
+    )
+
+
+@dataclass(frozen=True)
+class QuadraticProgramResult:
+    solution: list[float]
+    objective: float
+    converged: bool
+    iterations: int
+
+
+def solve_quadratic_program(
+    q: Matrix,
+    c: Sequence[float],
+    lower_bounds: Sequence[float],
+    upper_bounds: Sequence[float],
+    *,
+    equality_coeffs: Sequence[float] | None = None,
+    equality_value: float = 0.0,
+    initial: Sequence[float] | None = None,
+) -> QuadraticProgramResult:
+    """Bounded QP with optional equality ``aᵀx = value`` (projected gradient backend)."""
+    n = q.num_rows
+    if q.shape != (n, n) or len(c) != n or len(lower_bounds) != n or len(upper_bounds) != n:
+        raise ValueError("inconsistent dimensions for QP")
+    c_arr = (ct.c_double * n)(*[float(x) for x in c])
+    lo = (ct.c_double * n)(*[float(x) for x in lower_bounds])
+    hi = (ct.c_double * n)(*[float(x) for x in upper_bounds])
+    eq_len = len(equality_coeffs) if equality_coeffs is not None else 0
+    eq_arr = (ct.c_double * eq_len)(*map(float, equality_coeffs)) if eq_len else None
+    init_len = len(initial) if initial is not None else 0
+    init_arr = (ct.c_double * init_len)(*map(float, initial)) if init_len else None
+    sol = (ct.c_double * n)()
+    obj = ct.c_double()
+    conv = ct.c_bool()
+    iters = ct.c_int()
+    ok = _lib.ctorch_quadratic_program_solve(
+        q._ptr,
+        c_arr,
+        ct.c_size_t(n),
+        lo,
+        hi,
+        eq_arr,
+        ct.c_size_t(eq_len),
+        float(equality_value),
+        init_arr,
+        ct.c_size_t(init_len),
+        sol,
+        ct.c_size_t(n),
+        ct.byref(obj),
+        ct.byref(conv),
+        ct.byref(iters),
+    )
+    if not ok:
+        raise _raise_last_error("solve_quadratic_program failed")
+    return QuadraticProgramResult(
+        solution=[float(sol[i]) for i in range(n)],
+        objective=float(obj.value),
+        converged=bool(conv.value),
+        iterations=int(iters.value),
+    )

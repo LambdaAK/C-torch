@@ -25,6 +25,9 @@ typedef struct CTorchMAB CTorchMAB;
 typedef struct CTorchUCB CTorchUCB;
 typedef struct CTorchSequential CTorchSequential;
 typedef struct CTorchNNOptimizer CTorchNNOptimizer;
+typedef struct CTorchExpr CTorchExpr;
+typedef struct CTorchLossFunction CTorchLossFunction;
+typedef struct CTorchParamMap CTorchParamMap;
 
 typedef enum CTorchOptimType
 {
@@ -296,6 +299,112 @@ CTorchNNOptimizer* ctorch_nn_optimizer_create(
 void ctorch_nn_optimizer_destroy(CTorchNNOptimizer* optimizer);
 bool ctorch_nn_optimizer_zero_grad(CTorchNNOptimizer* optimizer);
 bool ctorch_nn_optimizer_step(CTorchNNOptimizer* optimizer);
+
+CTorchMatrix* ctorch_matrix_eye(size_t dim);
+CTorchMatrix* ctorch_matrix_row(const CTorchMatrix* matrix, size_t row);
+CTorchMatrix* ctorch_matrix_l2_norm_cols(const CTorchMatrix* matrix);
+CTorchMatrix* ctorch_matrix_center_cols(const CTorchMatrix* matrix);
+bool ctorch_matrix_euclidean_distance(const CTorchMatrix* lhs, const CTorchMatrix* rhs, double* out_value);
+bool ctorch_matrix_inner_product(const CTorchMatrix* lhs, const CTorchMatrix* rhs, double* out_value);
+CTorchMatrix* ctorch_matrix_relu(const CTorchMatrix* matrix);
+CTorchMatrix* ctorch_matrix_relu_deriv(const CTorchMatrix* matrix);
+CTorchMatrix* ctorch_matrix_sigmoid(const CTorchMatrix* matrix);
+CTorchMatrix* ctorch_matrix_sigmoid_deriv(const CTorchMatrix* matrix);
+CTorchMatrix* ctorch_matrix_tanh(const CTorchMatrix* matrix);
+CTorchMatrix* ctorch_matrix_tanh_deriv(const CTorchMatrix* matrix);
+CTorchMatrix* ctorch_matrix_elm_wise_product(const CTorchMatrix* lhs, const CTorchMatrix* rhs);
+
+CTorchExpr* ctorch_expr_num(double value);
+CTorchExpr* ctorch_expr_var(const char* name);
+CTorchExpr* ctorch_expr_add(const CTorchExpr* lhs, const CTorchExpr* rhs);
+CTorchExpr* ctorch_expr_sub(const CTorchExpr* lhs, const CTorchExpr* rhs);
+CTorchExpr* ctorch_expr_mul(const CTorchExpr* lhs, const CTorchExpr* rhs);
+CTorchExpr* ctorch_expr_div(const CTorchExpr* lhs, const CTorchExpr* rhs);
+CTorchExpr* ctorch_expr_pow(const CTorchExpr* lhs, const CTorchExpr* rhs);
+CTorchExpr* ctorch_expr_neg(const CTorchExpr* operand);
+CTorchExpr* ctorch_expr_exp(const CTorchExpr* operand);
+CTorchExpr* ctorch_expr_log(const CTorchExpr* operand);
+CTorchExpr* ctorch_expr_sqrt(const CTorchExpr* operand);
+CTorchExpr* ctorch_expr_abs(const CTorchExpr* operand);
+CTorchExpr* ctorch_expr_max(const CTorchExpr* lhs, const CTorchExpr* rhs);
+CTorchExpr* ctorch_expr_min(const CTorchExpr* lhs, const CTorchExpr* rhs);
+CTorchExpr* ctorch_expr_sigmoid(const CTorchExpr* operand);
+void ctorch_expr_destroy(CTorchExpr* expr);
+const char* ctorch_expr_to_string(const CTorchExpr* expr);
+CTorchExpr* ctorch_expr_simplify(const CTorchExpr* expr);
+CTorchExpr* ctorch_expr_substitute(const CTorchExpr* expr, const char* var_name, const CTorchExpr* replacement);
+size_t ctorch_expr_variable_count(const CTorchExpr* expr);
+bool ctorch_expr_variable_name(const CTorchExpr* expr, size_t index, char* out_buf, size_t out_buf_len);
+bool ctorch_expr_evaluate(
+    const CTorchExpr* expr,
+    size_t pair_count,
+    const char** var_names,
+    const double* var_values,
+    double* out_value);
+bool ctorch_expr_gradient(
+    const CTorchExpr* expr,
+    size_t pair_count,
+    const char** var_names,
+    const double* var_values,
+    double* out_partials);
+
+CTorchLossFunction* ctorch_loss_regression_mse_create(int feature_dim, double l2_lambda);
+CTorchLossFunction* ctorch_loss_logistic_create(int feature_dim);
+void ctorch_loss_destroy(CTorchLossFunction* loss);
+
+CTorchParamMap* ctorch_symbolic_optimize(
+    const CTorchLossFunction* loss,
+    const CTorchMatrix* x_train,
+    const CTorchMatrix* y_train,
+    CTorchOptimType optim_type,
+    double learning_rate,
+    int max_iter,
+    int batch_size,
+    double beta1,
+    double beta2,
+    double epsilon,
+    double rho,
+    double weight_decay);
+void ctorch_param_map_destroy(CTorchParamMap* map);
+size_t ctorch_param_map_size(const CTorchParamMap* map);
+bool ctorch_param_map_get(const CTorchParamMap* map, size_t index, char* key_buf, size_t key_buf_len, double* out_value);
+
+typedef enum CTorchLinearProgramSense
+{
+    CTORCH_LP_MINIMIZE = 0,
+    CTORCH_LP_MAXIMIZE = 1
+} CTorchLinearProgramSense;
+
+bool ctorch_linear_program_solve(
+    const CTorchMatrix* a,
+    const double* b,
+    size_t b_count,
+    const double* c,
+    size_t c_count,
+    CTorchLinearProgramSense sense,
+    double* solution_out,
+    size_t solution_capacity,
+    double* objective_out,
+    bool* optimal_out,
+    bool* unbounded_out,
+    int* iterations_out);
+
+bool ctorch_quadratic_program_solve(
+    const CTorchMatrix* q,
+    const double* c,
+    size_t n,
+    const double* lower_bounds,
+    const double* upper_bounds,
+    const double* equality_coeffs,
+    size_t equality_len,
+    double equality_value,
+    const double* initial_solution,
+    size_t initial_len,
+    double* solution_out,
+    size_t solution_capacity,
+    double* objective_out,
+    bool* converged_out,
+    int* iterations_out);
 
 #ifdef __cplusplus
 } // extern "C"
