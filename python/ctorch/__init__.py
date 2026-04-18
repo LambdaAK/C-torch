@@ -26,6 +26,7 @@ __all__ = [
     "OptimType",
     "DataAugmentationType",
     "KernelType",
+    "kernel_value",
     "NNOptimType",
     "Expr",
     "SymbolicLoss",
@@ -307,6 +308,16 @@ _lib.ctorch_kernel_svm_score.argtypes = [
     ct.POINTER(ct.c_double),
 ]
 _lib.ctorch_kernel_svm_score.restype = ct.c_bool
+_lib.ctorch_kernel_compute.argtypes = [
+    ct.c_void_p,
+    ct.c_void_p,
+    ct.c_int,
+    ct.c_double,
+    ct.POINTER(ct.c_double),
+]
+_lib.ctorch_kernel_compute.restype = ct.c_bool
+_lib.ctorch_kernel_svm_loss_expr.argtypes = [ct.c_void_p]
+_lib.ctorch_kernel_svm_loss_expr.restype = ct.c_void_p
 
 _lib.ctorch_random_fourier_svm_create.argtypes = [
     ct.c_void_p,
@@ -668,6 +679,28 @@ def _coerce_row_vector(value: Matrix | Sequence[object]) -> Matrix:
     if matrix.num_rows != 1:
         raise ValueError("expected a row vector with shape (1, n)")
     return matrix
+
+
+def kernel_value(
+    x: Matrix | Sequence[object],
+    y: Matrix | Sequence[object],
+    kernel: KernelType | int = KernelType.LINEAR,
+    gamma: float = 1.0,
+) -> float:
+    x_mat = _coerce_row_vector(x)
+    y_mat = _coerce_row_vector(y)
+    kernel_type = _coerce_enum(kernel, KernelType, "kernel")
+    out = ct.c_double()
+    ok = _lib.ctorch_kernel_compute(
+        x_mat._ptr,
+        y_mat._ptr,
+        int(kernel_type),
+        float(gamma),
+        ct.byref(out),
+    )
+    if not ok:
+        raise _raise_last_error("kernel_value failed")
+    return float(out.value)
 
 
 class Matrix:
@@ -1249,6 +1282,12 @@ class KernelSVM:
         if not ok:
             raise _raise_last_error("KernelSVM.score failed")
         return float(out.value)
+
+    def loss_expr(self) -> Expr:
+        ptr = _lib.ctorch_kernel_svm_loss_expr(self._ptr)
+        if not ptr:
+            raise _raise_last_error("KernelSVM.loss_expr failed")
+        return Expr(ptr)
 
     def __del__(self) -> None:
         ptr = getattr(self, "_ptr", None)
