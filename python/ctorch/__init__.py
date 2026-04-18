@@ -30,6 +30,7 @@ __all__ = [
     "Expr",
     "SymbolicLoss",
     "symbolic_optimize",
+    "optimize_expr",
     "encode_regression_label",
     "regression_label_row",
     "LinearProgramSense",
@@ -508,6 +509,8 @@ _lib.ctorch_expr_evaluate.argtypes = [ct.c_void_p, ct.c_size_t, ct.POINTER(ct.c_
 _lib.ctorch_expr_evaluate.restype = ct.c_bool
 _lib.ctorch_expr_gradient.argtypes = [ct.c_void_p, ct.c_size_t, ct.POINTER(ct.c_char_p), ct.POINTER(ct.c_double), ct.POINTER(ct.c_double)]
 _lib.ctorch_expr_gradient.restype = ct.c_bool
+_lib.ctorch_expr_diff_single.argtypes = [ct.c_void_p, ct.c_char_p, ct.c_double]
+_lib.ctorch_expr_diff_single.restype = ct.c_void_p
 
 _lib.ctorch_loss_regression_mse_create.argtypes = [ct.c_int, ct.c_double]
 _lib.ctorch_loss_regression_mse_create.restype = ct.c_void_p
@@ -531,6 +534,21 @@ _lib.ctorch_symbolic_optimize.argtypes = [
     ct.c_double,
 ]
 _lib.ctorch_symbolic_optimize.restype = ct.c_void_p
+_lib.ctorch_optimize_expr.argtypes = [
+    ct.c_void_p,
+    ct.c_size_t,
+    ct.POINTER(ct.c_char_p),
+    ct.POINTER(ct.c_double),
+    ct.c_int,
+    ct.c_double,
+    ct.c_int,
+    ct.c_double,
+    ct.c_double,
+    ct.c_double,
+    ct.c_double,
+    ct.c_double,
+]
+_lib.ctorch_optimize_expr.restype = ct.c_void_p
 _lib.ctorch_param_map_destroy.argtypes = [ct.c_void_p]
 _lib.ctorch_param_map_destroy.restype = None
 _lib.ctorch_param_map_size.argtypes = [ct.c_void_p]
@@ -1741,6 +1759,13 @@ class Expr:
             raise _raise_last_error("Expr.gradient failed")
         return {keys[i]: float(outs[i]) for i in range(len(keys))}
 
+    def diff_single(self, name: str, value: float) -> Expr:
+        nb = name.encode("utf-8")
+        ptr = _lib.ctorch_expr_diff_single(self._ptr, nb, float(value))
+        if not ptr:
+            raise _raise_last_error("Expr.diff_single failed")
+        return Expr(ptr)
+
     def __str__(self) -> str:
         raw = _lib.ctorch_expr_to_string(self._ptr)
         if raw is None:
@@ -1786,6 +1811,19 @@ class SymbolicLoss:
             self._ptr = ct.c_void_p()
 
 
+def _param_map_to_dict(param_map_ptr: int, context: str) -> dict[str, float]:
+    n = int(_lib.ctorch_param_map_size(param_map_ptr))
+    out: dict[str, float] = {}
+    buf = ct.create_string_buffer(256)
+    for i in range(n):
+        v = ct.c_double()
+        ok = _lib.ctorch_param_map_get(param_map_ptr, ct.c_size_t(i), buf, ct.c_size_t(256), ct.byref(v))
+        if not ok:
+            raise _raise_last_error(f"{context} readback failed")
+        out[buf.value.decode("utf-8")] = float(v.value)
+    return out
+
+
 def symbolic_optimize(
     loss: SymbolicLoss,
     x_train: Matrix,
@@ -1820,16 +1858,47 @@ def symbolic_optimize(
     if not pm:
         raise _raise_last_error("symbolic_optimize failed")
     try:
-        n = int(_lib.ctorch_param_map_size(pm))
-        out: dict[str, float] = {}
-        buf = ct.create_string_buffer(256)
-        for i in range(n):
-            v = ct.c_double()
-            ok = _lib.ctorch_param_map_get(pm, ct.c_size_t(i), buf, ct.c_size_t(256), ct.byref(v))
-            if not ok:
-                raise _raise_last_error("symbolic_optimize readback failed")
-            out[buf.value.decode("utf-8")] = float(v.value)
-        return out
+        return _param_map_to_dict(pm, "symbolic_optimize")
+    finally:
+        _lib.ctorch_param_map_destroy(pm)
+
+
+def optimize_expr(
+    expr: Expr,
+    initial: Mapping[str, float],
+    *,
+    optim_type: OptimType | int = OptimType.ADAM,
+    learning_rate: float = 0.05,
+    max_iter: int = 800,
+    beta1: float = 0.9,
+    beta2: float = 0.999,
+    epsilon: float = 1e-8,
+    rho: float = 0.99,
+    weight_decay: float = 0.0,
+) -> dict[str, float]:
+    """Optimize a raw symbolic expression from explicit initial variable values."""
+    ot = _coerce_enum(optim_type, OptimType, "optim_type")
+    keys = list(initial.keys())
+    arr, _keep = _c_str_array(keys)
+    vals = (ct.c_double * len(keys))(*[float(initial[k]) for k in keys])
+    pm = _lib.ctorch_optimize_expr(
+        expr._ptr,
+        ct.c_size_t(len(keys)),
+        arr,
+        vals,
+        int(ot),
+        float(learning_rate),
+        int(max_iter),
+        float(beta1),
+        float(beta2),
+        float(epsilon),
+        float(rho),
+        float(weight_decay),
+    )
+    if not pm:
+        raise _raise_last_error("optimize_expr failed")
+    try:
+        return _param_map_to_dict(pm, "optimize_expr")
     finally:
         _lib.ctorch_param_map_destroy(pm)
 

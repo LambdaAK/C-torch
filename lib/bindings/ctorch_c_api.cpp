@@ -1955,6 +1955,23 @@ bool ctorch_expr_gradient(
     }, false);
 }
 
+CTorchExpr* ctorch_expr_diff_single(
+    const CTorchExpr* expr,
+    const char* var_name,
+    double value)
+{
+    return run_api<CTorchExpr*>([&]() -> CTorchExpr* {
+        if (expr == nullptr || !expr->node || var_name == nullptr)
+        {
+            throw std::invalid_argument("ctorch_expr_diff_single invalid arguments");
+        }
+        math::Differentiator diff;
+        auto handle = std::make_unique<CTorchExpr>();
+        handle->node = diff.diff_single(expr->node, std::string(var_name), value);
+        return handle.release();
+    }, nullptr);
+}
+
 CTorchLossFunction* ctorch_loss_regression_mse_create(int feature_dim, double l2_lambda)
 {
     return run_api<CTorchLossFunction*>([&]() -> CTorchLossFunction* {
@@ -2024,6 +2041,91 @@ CTorchParamMap* ctorch_symbolic_optimize(
         std::unordered_map<std::string, double> theta0 =
             ml_bind_math::zero_initial_theta(*loss->impl, xTr, yTr);
         std::unordered_map<std::string, double> theta = opt.optimize(loss->impl, xTr, yTr, theta0);
+        auto out = std::make_unique<CTorchParamMap>();
+        out->values = std::move(theta);
+        return out.release();
+    }, nullptr);
+}
+
+CTorchParamMap* ctorch_optimize_expr(
+    const CTorchExpr* expr,
+    size_t pair_count,
+    const char** var_names,
+    const double* initial_values,
+    CTorchOptimType optim_type,
+    double learning_rate,
+    int max_iter,
+    double beta1,
+    double beta2,
+    double epsilon,
+    double rho,
+    double weight_decay)
+{
+    return run_api<CTorchParamMap*>([&]() -> CTorchParamMap* {
+        if (expr == nullptr || !expr->node)
+        {
+            throw std::invalid_argument("expr is null");
+        }
+        if (pair_count > 0 && (var_names == nullptr || initial_values == nullptr))
+        {
+            throw std::invalid_argument("var_names/initial_values null with non-zero count");
+        }
+        if (optim_type == CTORCH_OPTIM_SGD)
+        {
+            throw std::invalid_argument(
+                "SGD is not supported for raw Expr optimize path; use GD, ADAGRAD, RMSPROP, ADAM, or ADAMW");
+        }
+
+        std::unordered_map<std::string, double> theta0;
+        for (size_t i = 0; i < pair_count; ++i)
+        {
+            if (var_names[i] == nullptr)
+            {
+                throw std::invalid_argument("null variable name");
+            }
+            theta0[std::string(var_names[i])] = initial_values[i];
+        }
+
+        std::unordered_map<std::string, double> theta;
+        switch (as_optim_type(optim_type))
+        {
+        case math::OptimType::GD:
+        {
+            math::GD gd(learning_rate, max_iter);
+            theta = gd.optimize(expr->node, theta0);
+            break;
+        }
+        case math::OptimType::ADAGRAD:
+        {
+            math::Adagrad adagrad(learning_rate, max_iter, epsilon);
+            theta = adagrad.optimize(expr->node, theta0);
+            break;
+        }
+        case math::OptimType::RMSPROP:
+        {
+            math::RMSProp rmsprop(learning_rate, max_iter, rho, epsilon);
+            theta = rmsprop.optimize(expr->node, theta0);
+            break;
+        }
+        case math::OptimType::ADAM:
+        {
+            math::Adam adam(learning_rate, max_iter, beta1, beta2, epsilon);
+            theta = adam.optimize(expr->node, theta0);
+            break;
+        }
+        case math::OptimType::ADAMW:
+        {
+            math::AdamW adamw(learning_rate, max_iter, beta1, beta2, epsilon, weight_decay);
+            theta = adamw.optimize(expr->node, theta0);
+            break;
+        }
+        case math::OptimType::SGD:
+            throw std::invalid_argument(
+                "SGD is not supported for raw Expr optimize path; use GD, ADAGRAD, RMSPROP, ADAM, or ADAMW");
+        default:
+            throw std::invalid_argument("optimizer type unsupported for raw Expr optimize path");
+        }
+
         auto out = std::make_unique<CTorchParamMap>();
         out->values = std::move(theta);
         return out.release();
