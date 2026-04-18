@@ -643,6 +643,21 @@ bool ctorch_matrix_to_array(
     }, false);
 }
 
+bool ctorch_matrix_equals(
+    const CTorchMatrix* lhs,
+    const CTorchMatrix* rhs,
+    bool* out_equal)
+{
+    return run_api<bool>([&]() -> bool {
+        if (out_equal == nullptr)
+        {
+            throw std::invalid_argument("out_equal pointer is null");
+        }
+        *out_equal = as_matrix_ref(lhs) == as_matrix_ref(rhs);
+        return true;
+    }, false);
+}
+
 CTorchMatrix* ctorch_matrix_add(const CTorchMatrix* lhs, const CTorchMatrix* rhs)
 {
     return run_api<CTorchMatrix*>([&]() -> CTorchMatrix* {

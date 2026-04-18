@@ -101,6 +101,10 @@ bool ctorch_matrix_to_array(
     const CTorchMatrix* matrix,
     double* out_values,
     size_t out_count);
+bool ctorch_matrix_equals(
+    const CTorchMatrix* lhs,
+    const CTorchMatrix* rhs,
+    bool* out_equal);
 
 CTorchMatrix* ctorch_matrix_add(const CTorchMatrix* lhs, const CTorchMatrix* rhs);
 CTorchMatrix* ctorch_matrix_sub(const CTorchMatrix* lhs, const CTorchMatrix* rhs);
