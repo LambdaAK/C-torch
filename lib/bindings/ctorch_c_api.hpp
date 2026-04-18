@@ -379,6 +379,10 @@ bool ctorch_expr_gradient(
     const char** var_names,
     const double* var_values,
     double* out_partials);
+CTorchExpr* ctorch_expr_diff_single(
+    const CTorchExpr* expr,
+    const char* var_name,
+    double value);
 
 CTorchLossFunction* ctorch_loss_regression_mse_create(int feature_dim, double l2_lambda);
 CTorchLossFunction* ctorch_loss_logistic_create(int feature_dim);
@@ -392,6 +396,19 @@ CTorchParamMap* ctorch_symbolic_optimize(
     double learning_rate,
     int max_iter,
     int batch_size,
+    double beta1,
+    double beta2,
+    double epsilon,
+    double rho,
+    double weight_decay);
+CTorchParamMap* ctorch_optimize_expr(
+    const CTorchExpr* expr,
+    size_t pair_count,
+    const char** var_names,
+    const double* initial_values,
+    CTorchOptimType optim_type,
+    double learning_rate,
+    int max_iter,
     double beta1,
     double beta2,
     double epsilon,
