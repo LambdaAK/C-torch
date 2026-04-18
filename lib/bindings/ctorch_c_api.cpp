@@ -480,6 +480,15 @@ ml::UCB& as_ucb_mut(CTorchUCB* handle)
     return *handle->value;
 }
 
+const ml::Sequential& as_sequential_ref(const CTorchSequential* handle)
+{
+    if (handle == nullptr || handle->value == nullptr)
+    {
+        throw std::invalid_argument("sequential model handle is null");
+    }
+    return *handle->value;
+}
+
 ml::Sequential& as_sequential_mut(CTorchSequential* handle)
 {
     if (handle == nullptr || handle->value == nullptr)
@@ -1414,6 +1423,101 @@ bool ctorch_sequential_load(CTorchSequential* model, const char* filepath)
         if (!ok)
         {
             set_error("sequential load failed");
+        }
+        return ok;
+    }, false);
+}
+
+bool ctorch_sequential_copy_parameters_from(CTorchSequential* dst, const CTorchSequential* src)
+{
+    return run_api<bool>([&]() -> bool {
+        const bool ok = as_sequential_mut(dst).copy_parameters_from(as_sequential_ref(src));
+        if (!ok)
+        {
+            set_error("sequential parameter copy failed: model architectures are incompatible");
+        }
+        return ok;
+    }, false);
+}
+
+bool ctorch_sequential_parameter_count(const CTorchSequential* model, size_t* out_count)
+{
+    return run_api<bool>([&]() -> bool {
+        if (out_count == nullptr)
+        {
+            throw std::invalid_argument("out_count pointer is null");
+        }
+        *out_count = as_sequential_ref(model).parameter_count();
+        return true;
+    }, false);
+}
+
+CTorchMatrix* ctorch_sequential_get_parameter(const CTorchSequential* model, size_t index)
+{
+    return run_api<CTorchMatrix*>([&]() -> CTorchMatrix* {
+        Matrix value;
+        const bool ok = as_sequential_ref(model).get_parameter(index, value);
+        if (!ok)
+        {
+            throw std::out_of_range("parameter index out of range");
+        }
+        auto handle = std::make_unique<CTorchMatrix>();
+        handle->value = std::move(value);
+        return handle.release();
+    }, nullptr);
+}
+
+bool ctorch_sequential_set_parameter(CTorchSequential* model, size_t index, const CTorchMatrix* value)
+{
+    return run_api<bool>([&]() -> bool {
+        const bool ok = as_sequential_mut(model).set_parameter(index, as_matrix_ref(value));
+        if (!ok)
+        {
+            set_error("set_parameter failed: index out of range or matrix shape mismatch");
+        }
+        return ok;
+    }, false);
+}
+
+bool ctorch_sequential_linear_layer_count(const CTorchSequential* model, size_t* out_count)
+{
+    return run_api<bool>([&]() -> bool {
+        if (out_count == nullptr)
+        {
+            throw std::invalid_argument("out_count pointer is null");
+        }
+        *out_count = as_sequential_ref(model).linear_layer_count();
+        return true;
+    }, false);
+}
+
+bool ctorch_sequential_linear_layer_dims(
+    const CTorchSequential* model,
+    size_t linear_index,
+    int* out_input_dim,
+    int* out_output_dim)
+{
+    return run_api<bool>([&]() -> bool {
+        if (out_input_dim == nullptr)
+        {
+            throw std::invalid_argument("out_input_dim pointer is null");
+        }
+        if (out_output_dim == nullptr)
+        {
+            throw std::invalid_argument("out_output_dim pointer is null");
+        }
+
+        int input_dim = 0;
+        int output_dim = 0;
+        const bool ok = as_sequential_ref(model).linear_layer_dims(linear_index, input_dim, output_dim);
+        if (!ok)
+        {
+            set_error("linear layer index out of range");
+        }
+        if (ok)
+        {
+            *out_input_dim = input_dim;
+            *out_output_dim = output_dim;
         }
         return ok;
     }, false);

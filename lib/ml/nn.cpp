@@ -5,6 +5,44 @@
 
 
 namespace ml {
+    namespace {
+        const LinearLayer* nth_linear_layer(
+            const std::vector<std::shared_ptr<Layer>>& layers,
+            size_t linear_index)
+        {
+            size_t seen = 0;
+            for (const auto& layer : layers) {
+                auto* linear = dynamic_cast<const LinearLayer*>(layer.get());
+                if (linear == nullptr) {
+                    continue;
+                }
+                if (seen == linear_index) {
+                    return linear;
+                }
+                ++seen;
+            }
+            return nullptr;
+        }
+
+        LinearLayer* nth_linear_layer(
+            std::vector<std::shared_ptr<Layer>>& layers,
+            size_t linear_index)
+        {
+            size_t seen = 0;
+            for (auto& layer : layers) {
+                auto* linear = dynamic_cast<LinearLayer*>(layer.get());
+                if (linear == nullptr) {
+                    continue;
+                }
+                if (seen == linear_index) {
+                    return linear;
+                }
+                ++seen;
+            }
+            return nullptr;
+        }
+    } // namespace
+
     Matrix ReLULayer::forward(const Matrix& input) {
         return input.relu();
     }
@@ -61,11 +99,11 @@ namespace ml {
         bias = std::make_shared<Matrix>(bias_mat);
     }
 
-    int LinearLayer::get_input_dim() {
+    int LinearLayer::get_input_dim() const {
         return input_dim;
     }
 
-    int LinearLayer::get_output_dim() {
+    int LinearLayer::get_output_dim() const {
         return output_dim;
     }
 
@@ -102,6 +140,64 @@ namespace ml {
         }
 
         return params;
+    }
+
+    size_t Sequential::parameter_count() const {
+        return linear_layer_count() * 2;
+    }
+
+    bool Sequential::get_parameter(size_t index, Matrix& out_parameter) const {
+        const LinearLayer* linear = nth_linear_layer(layers, index / 2);
+        if (linear == nullptr) {
+            return false;
+        }
+
+        auto [weights, bias] = const_cast<LinearLayer*>(linear)->get_params();
+        std::shared_ptr<Matrix> target = (index % 2 == 0) ? weights : bias;
+        if (target == nullptr) {
+            return false;
+        }
+        out_parameter = *target;
+        return true;
+    }
+
+    bool Sequential::set_parameter(size_t index, const Matrix& value) {
+        LinearLayer* linear = nth_linear_layer(layers, index / 2);
+        if (linear == nullptr) {
+            return false;
+        }
+
+        auto [weights, bias] = linear->get_params();
+        std::shared_ptr<Matrix> target = (index % 2 == 0) ? weights : bias;
+        if (target == nullptr) {
+            return false;
+        }
+        if (target->numRows() != value.numRows() || target->numCols() != value.numCols()) {
+            return false;
+        }
+
+        *target = value;
+        return true;
+    }
+
+    size_t Sequential::linear_layer_count() const {
+        size_t count = 0;
+        for (const auto& layer : layers) {
+            if (dynamic_cast<const LinearLayer*>(layer.get()) != nullptr) {
+                ++count;
+            }
+        }
+        return count;
+    }
+
+    bool Sequential::linear_layer_dims(size_t linear_index, int& out_input_dim, int& out_output_dim) const {
+        const LinearLayer* linear = nth_linear_layer(layers, linear_index);
+        if (linear == nullptr) {
+            return false;
+        }
+        out_input_dim = linear->get_input_dim();
+        out_output_dim = linear->get_output_dim();
+        return true;
     }
 
     bool Sequential::copy_parameters_from(const Sequential& other) {

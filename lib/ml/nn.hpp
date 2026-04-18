@@ -172,13 +172,13 @@ namespace ml {
        * @brief Returns expected input feature dimension.
        * @return Input dimension.
        */
-      int get_input_dim();
+      int get_input_dim() const;
 
       /**
        * @brief Returns produced output feature dimension.
        * @return Output dimension.
        */
-      int get_output_dim();
+      int get_output_dim() const;
 
       /**
        * @brief Computes affine forward pass.
@@ -244,6 +244,43 @@ namespace ml {
        * @return Vector of `(parameter_ptr, gradient_ptr)` pairs.
        */
       std::vector<std::pair<std::shared_ptr<Matrix>, std::shared_ptr<Matrix>>> parameters();
+
+      /**
+       * @brief Returns number of exposed trainable parameter matrices.
+       * @return Number of parameter tensors (`2 * linear_layer_count()`).
+       */
+      size_t parameter_count() const;
+
+      /**
+       * @brief Copies a parameter tensor by flat parameter index.
+       * @param index Zero-based parameter index in `[W0, b0, W1, b1, ...]`.
+       * @param out_parameter Destination matrix copy.
+       * @return `true` when index is valid and output is assigned.
+       */
+      bool get_parameter(size_t index, Matrix& out_parameter) const;
+
+      /**
+       * @brief Replaces a parameter tensor by flat parameter index.
+       * @param index Zero-based parameter index in `[W0, b0, W1, b1, ...]`.
+       * @param value New parameter matrix. Shape must match target tensor.
+       * @return `true` on success, `false` for out-of-range index or shape mismatch.
+       */
+      bool set_parameter(size_t index, const Matrix& value);
+
+      /**
+       * @brief Counts linear layers in execution order.
+       * @return Number of `LinearLayer` instances in the stack.
+       */
+      size_t linear_layer_count() const;
+
+      /**
+       * @brief Returns dimensions of a linear layer by linear-only index.
+       * @param linear_index Zero-based index among linear layers.
+       * @param out_input_dim Output input dimension.
+       * @param out_output_dim Output output dimension.
+       * @return `true` when index is valid and outputs are assigned.
+       */
+      bool linear_layer_dims(size_t linear_index, int& out_input_dim, int& out_output_dim) const;
 
       /**
        * @brief Copies parameters from another model if layer topology matches.

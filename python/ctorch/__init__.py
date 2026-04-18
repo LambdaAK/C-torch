@@ -417,6 +417,23 @@ _lib.ctorch_sequential_save.argtypes = [ct.c_void_p, ct.c_char_p]
 _lib.ctorch_sequential_save.restype = ct.c_bool
 _lib.ctorch_sequential_load.argtypes = [ct.c_void_p, ct.c_char_p]
 _lib.ctorch_sequential_load.restype = ct.c_bool
+_lib.ctorch_sequential_copy_parameters_from.argtypes = [ct.c_void_p, ct.c_void_p]
+_lib.ctorch_sequential_copy_parameters_from.restype = ct.c_bool
+_lib.ctorch_sequential_parameter_count.argtypes = [ct.c_void_p, ct.POINTER(ct.c_size_t)]
+_lib.ctorch_sequential_parameter_count.restype = ct.c_bool
+_lib.ctorch_sequential_get_parameter.argtypes = [ct.c_void_p, ct.c_size_t]
+_lib.ctorch_sequential_get_parameter.restype = ct.c_void_p
+_lib.ctorch_sequential_set_parameter.argtypes = [ct.c_void_p, ct.c_size_t, ct.c_void_p]
+_lib.ctorch_sequential_set_parameter.restype = ct.c_bool
+_lib.ctorch_sequential_linear_layer_count.argtypes = [ct.c_void_p, ct.POINTER(ct.c_size_t)]
+_lib.ctorch_sequential_linear_layer_count.restype = ct.c_bool
+_lib.ctorch_sequential_linear_layer_dims.argtypes = [
+    ct.c_void_p,
+    ct.c_size_t,
+    ct.POINTER(ct.c_int),
+    ct.POINTER(ct.c_int),
+]
+_lib.ctorch_sequential_linear_layer_dims.restype = ct.c_bool
 
 _lib.ctorch_nn_optimizer_create.argtypes = [
     ct.c_void_p,
@@ -1542,6 +1559,54 @@ class Sequential:
         ok = _lib.ctorch_sequential_load(self._ptr, encoded)
         if not ok:
             raise _raise_last_error("Sequential.load failed")
+
+    def copy_parameters_from(self, other: Sequential) -> None:
+        if not isinstance(other, Sequential):
+            raise TypeError("other must be a Sequential")
+        ok = _lib.ctorch_sequential_copy_parameters_from(self._ptr, other._ptr)
+        if not ok:
+            raise _raise_last_error("Sequential.copy_parameters_from failed")
+
+    @property
+    def parameter_count(self) -> int:
+        out = ct.c_size_t()
+        ok = _lib.ctorch_sequential_parameter_count(self._ptr, ct.byref(out))
+        if not ok:
+            raise _raise_last_error("Sequential.parameter_count failed")
+        return int(out.value)
+
+    def get_parameter(self, index: int) -> Matrix:
+        ptr = _lib.ctorch_sequential_get_parameter(self._ptr, ct.c_size_t(int(index)))
+        if not ptr:
+            raise _raise_last_error("Sequential.get_parameter failed")
+        return Matrix(_ptr=ptr)
+
+    def set_parameter(self, index: int, value: Matrix | Sequence[object]) -> None:
+        value_mat = _coerce_matrix(value)
+        ok = _lib.ctorch_sequential_set_parameter(self._ptr, ct.c_size_t(int(index)), value_mat._ptr)
+        if not ok:
+            raise _raise_last_error("Sequential.set_parameter failed")
+
+    @property
+    def linear_layer_count(self) -> int:
+        out = ct.c_size_t()
+        ok = _lib.ctorch_sequential_linear_layer_count(self._ptr, ct.byref(out))
+        if not ok:
+            raise _raise_last_error("Sequential.linear_layer_count failed")
+        return int(out.value)
+
+    def linear_layer_dims(self, index: int) -> tuple[int, int]:
+        input_dim = ct.c_int()
+        output_dim = ct.c_int()
+        ok = _lib.ctorch_sequential_linear_layer_dims(
+            self._ptr,
+            ct.c_size_t(int(index)),
+            ct.byref(input_dim),
+            ct.byref(output_dim),
+        )
+        if not ok:
+            raise _raise_last_error("Sequential.linear_layer_dims failed")
+        return (int(input_dim.value), int(output_dim.value))
 
     def __del__(self) -> None:
         ptr = getattr(self, "_ptr", None)
