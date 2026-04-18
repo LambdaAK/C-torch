@@ -285,6 +285,16 @@ CTorchMatrix* ctorch_sequential_forward(CTorchSequential* model, const CTorchMat
 bool ctorch_sequential_backward(CTorchSequential* model, const CTorchMatrix* dL_d_output);
 bool ctorch_sequential_save(CTorchSequential* model, const char* filepath);
 bool ctorch_sequential_load(CTorchSequential* model, const char* filepath);
+bool ctorch_sequential_copy_parameters_from(CTorchSequential* dst, const CTorchSequential* src);
+bool ctorch_sequential_parameter_count(const CTorchSequential* model, size_t* out_count);
+CTorchMatrix* ctorch_sequential_get_parameter(const CTorchSequential* model, size_t index);
+bool ctorch_sequential_set_parameter(CTorchSequential* model, size_t index, const CTorchMatrix* value);
+bool ctorch_sequential_linear_layer_count(const CTorchSequential* model, size_t* out_count);
+bool ctorch_sequential_linear_layer_dims(
+    const CTorchSequential* model,
+    size_t linear_index,
+    int* out_input_dim,
+    int* out_output_dim);
 
 CTorchNNOptimizer* ctorch_nn_optimizer_create(
     CTorchSequential* model,
