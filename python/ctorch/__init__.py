@@ -20,9 +20,12 @@ __all__ = [
     "PCA",
     "MAB",
     "UCB",
+    "Sequential",
+    "NNOptimizer",
     "OptimType",
     "DataAugmentationType",
     "KernelType",
+    "NNOptimType",
 ]
 
 
@@ -49,6 +52,14 @@ class KernelType(IntEnum):
     POLYNOMIAL_2 = 1
     POLYNOMIAL_3 = 2
     RADIAL_BASIS = 3
+
+
+class NNOptimType(IntEnum):
+    SGD = 0
+    ADAGRAD = 1
+    RMSPROP = 2
+    ADAM = 3
+    ADAMW = 4
 
 
 def _candidate_library_paths() -> list[Path]:
@@ -369,6 +380,46 @@ _lib.ctorch_ucb_select_arm.argtypes = [ct.c_void_p, ct.POINTER(ct.c_int)]
 _lib.ctorch_ucb_select_arm.restype = ct.c_bool
 _lib.ctorch_ucb_update.argtypes = [ct.c_void_p, ct.c_int, ct.c_double]
 _lib.ctorch_ucb_update.restype = ct.c_bool
+
+_lib.ctorch_sequential_create.argtypes = []
+_lib.ctorch_sequential_create.restype = ct.c_void_p
+_lib.ctorch_sequential_destroy.argtypes = [ct.c_void_p]
+_lib.ctorch_sequential_destroy.restype = None
+_lib.ctorch_sequential_add_linear.argtypes = [ct.c_void_p, ct.c_int, ct.c_int]
+_lib.ctorch_sequential_add_linear.restype = ct.c_bool
+_lib.ctorch_sequential_add_relu.argtypes = [ct.c_void_p]
+_lib.ctorch_sequential_add_relu.restype = ct.c_bool
+_lib.ctorch_sequential_add_sigmoid.argtypes = [ct.c_void_p]
+_lib.ctorch_sequential_add_sigmoid.restype = ct.c_bool
+_lib.ctorch_sequential_add_tanh.argtypes = [ct.c_void_p]
+_lib.ctorch_sequential_add_tanh.restype = ct.c_bool
+_lib.ctorch_sequential_forward.argtypes = [ct.c_void_p, ct.c_void_p]
+_lib.ctorch_sequential_forward.restype = ct.c_void_p
+_lib.ctorch_sequential_backward.argtypes = [ct.c_void_p, ct.c_void_p]
+_lib.ctorch_sequential_backward.restype = ct.c_bool
+_lib.ctorch_sequential_save.argtypes = [ct.c_void_p, ct.c_char_p]
+_lib.ctorch_sequential_save.restype = ct.c_bool
+_lib.ctorch_sequential_load.argtypes = [ct.c_void_p, ct.c_char_p]
+_lib.ctorch_sequential_load.restype = ct.c_bool
+
+_lib.ctorch_nn_optimizer_create.argtypes = [
+    ct.c_void_p,
+    ct.c_int,
+    ct.c_float,
+    ct.c_size_t,
+    ct.c_float,
+    ct.c_float,
+    ct.c_float,
+    ct.c_float,
+    ct.c_float,
+]
+_lib.ctorch_nn_optimizer_create.restype = ct.c_void_p
+_lib.ctorch_nn_optimizer_destroy.argtypes = [ct.c_void_p]
+_lib.ctorch_nn_optimizer_destroy.restype = None
+_lib.ctorch_nn_optimizer_zero_grad.argtypes = [ct.c_void_p]
+_lib.ctorch_nn_optimizer_zero_grad.restype = ct.c_bool
+_lib.ctorch_nn_optimizer_step.argtypes = [ct.c_void_p]
+_lib.ctorch_nn_optimizer_step.restype = ct.c_bool
 
 
 def _last_error() -> str:
@@ -1177,4 +1228,130 @@ class UCB:
         ptr = getattr(self, "_ptr", None)
         if ptr:
             _lib.ctorch_ucb_destroy(ptr)
+            self._ptr = ct.c_void_p()
+
+
+class Sequential:
+    """Feed-forward stack of linear and activation layers (matches C++ alternating layout)."""
+
+    __slots__ = ("_ptr",)
+
+    def __init__(self, _ptr: int | None = None) -> None:
+        if _ptr is not None:
+            self._ptr = ct.c_void_p(_ptr)
+            return
+        ptr = _lib.ctorch_sequential_create()
+        if not ptr:
+            raise _raise_last_error("Sequential() failed")
+        self._ptr = ct.c_void_p(ptr)
+
+    def add_linear(self, input_dim: int, output_dim: int) -> Sequential:
+        ok = _lib.ctorch_sequential_add_linear(self._ptr, int(input_dim), int(output_dim))
+        if not ok:
+            raise _raise_last_error("Sequential.add_linear failed")
+        return self
+
+    def add_relu(self) -> Sequential:
+        ok = _lib.ctorch_sequential_add_relu(self._ptr)
+        if not ok:
+            raise _raise_last_error("Sequential.add_relu failed")
+        return self
+
+    def add_sigmoid(self) -> Sequential:
+        ok = _lib.ctorch_sequential_add_sigmoid(self._ptr)
+        if not ok:
+            raise _raise_last_error("Sequential.add_sigmoid failed")
+        return self
+
+    def add_tanh(self) -> Sequential:
+        ok = _lib.ctorch_sequential_add_tanh(self._ptr)
+        if not ok:
+            raise _raise_last_error("Sequential.add_tanh failed")
+        return self
+
+    def forward(self, x: Matrix | Sequence[object]) -> Matrix:
+        """Run a forward pass.
+
+        ``x`` must follow the C++ layout: ``input_dim`` rows and **one column**
+        per sample (a column vector of shape ``(input_dim, 1)``). To process a
+        mini-batch, call ``forward`` once per sample (and ``backward`` per
+        sample) before ``NNOptimizer.step``, matching ``batch_size``.
+        """
+        x_mat = _coerce_matrix(x)
+        ptr = _lib.ctorch_sequential_forward(self._ptr, x_mat._ptr)
+        if not ptr:
+            raise _raise_last_error("Sequential.forward failed")
+        return Matrix(_ptr=ptr)
+
+    def backward(self, dL_d_output: Matrix | Sequence[object]) -> None:
+        grad_mat = _coerce_matrix(dL_d_output)
+        ok = _lib.ctorch_sequential_backward(self._ptr, grad_mat._ptr)
+        if not ok:
+            raise _raise_last_error("Sequential.backward failed")
+
+    def save(self, filepath: str) -> None:
+        encoded = filepath.encode("utf-8")
+        ok = _lib.ctorch_sequential_save(self._ptr, encoded)
+        if not ok:
+            raise _raise_last_error("Sequential.save failed")
+
+    def load(self, filepath: str) -> None:
+        encoded = filepath.encode("utf-8")
+        ok = _lib.ctorch_sequential_load(self._ptr, encoded)
+        if not ok:
+            raise _raise_last_error("Sequential.load failed")
+
+    def __del__(self) -> None:
+        ptr = getattr(self, "_ptr", None)
+        if ptr:
+            _lib.ctorch_sequential_destroy(ptr)
+            self._ptr = ct.c_void_p()
+
+
+class NNOptimizer:
+    __slots__ = ("_ptr", "_model")
+
+    def __init__(
+        self,
+        model: Sequential,
+        optim_type: NNOptimType | int = NNOptimType.SGD,
+        learning_rate: float = 0.01,
+        batch_size: int = 1,
+        beta1: float = 0.9,
+        beta2: float = 0.999,
+        epsilon: float = 1e-8,
+        rho: float = 0.99,
+        weight_decay: float = 0.0,
+    ) -> None:
+        self._model = model
+        optim = _coerce_enum(optim_type, NNOptimType, "optim_type")
+        ptr = _lib.ctorch_nn_optimizer_create(
+            model._ptr,
+            int(optim),
+            float(learning_rate),
+            ct.c_size_t(int(batch_size)),
+            float(beta1),
+            float(beta2),
+            float(epsilon),
+            float(rho),
+            float(weight_decay),
+        )
+        if not ptr:
+            raise _raise_last_error("NNOptimizer(...) failed")
+        self._ptr = ct.c_void_p(ptr)
+
+    def zero_grad(self) -> None:
+        ok = _lib.ctorch_nn_optimizer_zero_grad(self._ptr)
+        if not ok:
+            raise _raise_last_error("NNOptimizer.zero_grad failed")
+
+    def step(self) -> None:
+        ok = _lib.ctorch_nn_optimizer_step(self._ptr)
+        if not ok:
+            raise _raise_last_error("NNOptimizer.step failed")
+
+    def __del__(self) -> None:
+        ptr = getattr(self, "_ptr", None)
+        if ptr:
+            _lib.ctorch_nn_optimizer_destroy(ptr)
             self._ptr = ct.c_void_p()

@@ -23,6 +23,8 @@ typedef struct CTorchKMeans CTorchKMeans;
 typedef struct CTorchPCA CTorchPCA;
 typedef struct CTorchMAB CTorchMAB;
 typedef struct CTorchUCB CTorchUCB;
+typedef struct CTorchSequential CTorchSequential;
+typedef struct CTorchNNOptimizer CTorchNNOptimizer;
 
 typedef enum CTorchOptimType
 {
@@ -51,6 +53,15 @@ typedef enum CTorchKernelType
     CTORCH_KERNEL_POLYNOMIAL_3 = 2,
     CTORCH_KERNEL_RADIAL_BASIS = 3
 } CTorchKernelType;
+
+typedef enum CTorchNNOptimType
+{
+    CTORCH_NN_OPTIM_SGD = 0,
+    CTORCH_NN_OPTIM_ADAGRAD = 1,
+    CTORCH_NN_OPTIM_RMSPROP = 2,
+    CTORCH_NN_OPTIM_ADAM = 3,
+    CTORCH_NN_OPTIM_ADAMW = 4
+} CTorchNNOptimType;
 
 /**
  * Returns the last error message produced by the C API on the current thread.
@@ -260,6 +271,31 @@ CTorchUCB* ctorch_ucb_create(int n_arms);
 void ctorch_ucb_destroy(CTorchUCB* model);
 bool ctorch_ucb_select_arm(CTorchUCB* model, int* out_arm);
 bool ctorch_ucb_update(CTorchUCB* model, int arm, double reward);
+
+CTorchSequential* ctorch_sequential_create(void);
+void ctorch_sequential_destroy(CTorchSequential* model);
+bool ctorch_sequential_add_linear(CTorchSequential* model, int input_dim, int output_dim);
+bool ctorch_sequential_add_relu(CTorchSequential* model);
+bool ctorch_sequential_add_sigmoid(CTorchSequential* model);
+bool ctorch_sequential_add_tanh(CTorchSequential* model);
+CTorchMatrix* ctorch_sequential_forward(CTorchSequential* model, const CTorchMatrix* x);
+bool ctorch_sequential_backward(CTorchSequential* model, const CTorchMatrix* dL_d_output);
+bool ctorch_sequential_save(CTorchSequential* model, const char* filepath);
+bool ctorch_sequential_load(CTorchSequential* model, const char* filepath);
+
+CTorchNNOptimizer* ctorch_nn_optimizer_create(
+    CTorchSequential* model,
+    CTorchNNOptimType optim_type,
+    float learning_rate,
+    size_t batch_size,
+    float beta1,
+    float beta2,
+    float epsilon,
+    float rho,
+    float weight_decay);
+void ctorch_nn_optimizer_destroy(CTorchNNOptimizer* optimizer);
+bool ctorch_nn_optimizer_zero_grad(CTorchNNOptimizer* optimizer);
+bool ctorch_nn_optimizer_step(CTorchNNOptimizer* optimizer);
 
 #ifdef __cplusplus
 } // extern "C"

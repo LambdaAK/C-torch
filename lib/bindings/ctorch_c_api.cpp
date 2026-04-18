@@ -16,6 +16,8 @@
 #include "ml/linearregression.hpp"
 #include "ml/logisticregression.hpp"
 #include "ml/mab.hpp"
+#include "ml/nn.hpp"
+#include "ml/nn_optim.hpp"
 #include "ml/pca.hpp"
 #include "ml/perceptron.hpp"
 #include "ml/randomfouriersvm.hpp"
@@ -117,6 +119,25 @@ ml::KernelOptions as_kernel_options(CTorchKernelType kernel_type, double gamma)
 
 } // namespace
 
+static ml::NNOptimType as_nn_optim_type(CTorchNNOptimType optim_type)
+{
+    switch (optim_type)
+    {
+    case CTORCH_NN_OPTIM_SGD:
+        return ml::NNOptimType::SGD;
+    case CTORCH_NN_OPTIM_ADAGRAD:
+        return ml::NNOptimType::ADAGRAD;
+    case CTORCH_NN_OPTIM_RMSPROP:
+        return ml::NNOptimType::RMSPROP;
+    case CTORCH_NN_OPTIM_ADAM:
+        return ml::NNOptimType::ADAM;
+    case CTORCH_NN_OPTIM_ADAMW:
+        return ml::NNOptimType::ADAMW;
+    default:
+        throw std::invalid_argument("invalid neural network optimizer type");
+    }
+}
+
 struct CTorchMatrix
 {
     Matrix value;
@@ -180,6 +201,16 @@ struct CTorchMAB
 struct CTorchUCB
 {
     std::unique_ptr<ml::UCB> value;
+};
+
+struct CTorchSequential
+{
+    std::unique_ptr<ml::Sequential> value;
+};
+
+struct CTorchNNOptimizer
+{
+    std::unique_ptr<ml::NNOptimizer> value;
 };
 
 namespace {
@@ -324,6 +355,24 @@ ml::UCB& as_ucb_mut(CTorchUCB* handle)
     if (handle == nullptr || handle->value == nullptr)
     {
         throw std::invalid_argument("ucb handle is null");
+    }
+    return *handle->value;
+}
+
+ml::Sequential& as_sequential_mut(CTorchSequential* handle)
+{
+    if (handle == nullptr || handle->value == nullptr)
+    {
+        throw std::invalid_argument("sequential model handle is null");
+    }
+    return *handle->value;
+}
+
+ml::NNOptimizer& as_nn_optimizer_mut(CTorchNNOptimizer* handle)
+{
+    if (handle == nullptr || handle->value == nullptr)
+    {
+        throw std::invalid_argument("neural network optimizer handle is null");
     }
     return *handle->value;
 }
@@ -1145,6 +1194,164 @@ bool ctorch_ucb_update(CTorchUCB* model, int arm, double reward)
 {
     return run_api<bool>([&]() -> bool {
         as_ucb_mut(model).update(arm, reward);
+        return true;
+    }, false);
+}
+
+CTorchSequential* ctorch_sequential_create(void)
+{
+    return run_api<CTorchSequential*>([&]() -> CTorchSequential* {
+        auto handle = std::make_unique<CTorchSequential>();
+        handle->value = std::make_unique<ml::Sequential>();
+        return handle.release();
+    }, nullptr);
+}
+
+void ctorch_sequential_destroy(CTorchSequential* model)
+{
+    delete model;
+}
+
+bool ctorch_sequential_add_linear(CTorchSequential* model, int input_dim, int output_dim)
+{
+    return run_api<bool>([&]() -> bool {
+        if (input_dim <= 0 || output_dim <= 0)
+        {
+            throw std::invalid_argument("linear layer dimensions must be positive");
+        }
+        as_sequential_mut(model).add_layer(std::make_shared<ml::LinearLayer>(input_dim, output_dim));
+        return true;
+    }, false);
+}
+
+bool ctorch_sequential_add_relu(CTorchSequential* model)
+{
+    return run_api<bool>([&]() -> bool {
+        as_sequential_mut(model).add_layer(std::make_shared<ml::ReLULayer>());
+        return true;
+    }, false);
+}
+
+bool ctorch_sequential_add_sigmoid(CTorchSequential* model)
+{
+    return run_api<bool>([&]() -> bool {
+        as_sequential_mut(model).add_layer(std::make_shared<ml::SigmoidLayer>());
+        return true;
+    }, false);
+}
+
+bool ctorch_sequential_add_tanh(CTorchSequential* model)
+{
+    return run_api<bool>([&]() -> bool {
+        as_sequential_mut(model).add_layer(std::make_shared<ml::TanhLayer>());
+        return true;
+    }, false);
+}
+
+CTorchMatrix* ctorch_sequential_forward(CTorchSequential* model, const CTorchMatrix* x)
+{
+    return run_api<CTorchMatrix*>([&]() -> CTorchMatrix* {
+        Matrix output = as_sequential_mut(model).forward(as_matrix_ref(x));
+        auto handle = std::make_unique<CTorchMatrix>();
+        handle->value = std::move(output);
+        return handle.release();
+    }, nullptr);
+}
+
+bool ctorch_sequential_backward(CTorchSequential* model, const CTorchMatrix* dL_d_output)
+{
+    return run_api<bool>([&]() -> bool {
+        as_sequential_mut(model).backward(as_matrix_ref(dL_d_output));
+        return true;
+    }, false);
+}
+
+bool ctorch_sequential_save(CTorchSequential* model, const char* filepath)
+{
+    return run_api<bool>([&]() -> bool {
+        if (filepath == nullptr)
+        {
+            throw std::invalid_argument("filepath is null");
+        }
+        const bool ok = as_sequential_mut(model).save(filepath);
+        if (!ok)
+        {
+            set_error("sequential save failed");
+        }
+        return ok;
+    }, false);
+}
+
+bool ctorch_sequential_load(CTorchSequential* model, const char* filepath)
+{
+    return run_api<bool>([&]() -> bool {
+        if (filepath == nullptr)
+        {
+            throw std::invalid_argument("filepath is null");
+        }
+        const bool ok = as_sequential_mut(model).load(filepath);
+        if (!ok)
+        {
+            set_error("sequential load failed");
+        }
+        return ok;
+    }, false);
+}
+
+CTorchNNOptimizer* ctorch_nn_optimizer_create(
+    CTorchSequential* model,
+    CTorchNNOptimType optim_type,
+    float learning_rate,
+    size_t batch_size,
+    float beta1,
+    float beta2,
+    float epsilon,
+    float rho,
+    float weight_decay)
+{
+    return run_api<CTorchNNOptimizer*>([&]() -> CTorchNNOptimizer* {
+        if (batch_size == 0)
+        {
+            throw std::invalid_argument("batch_size must be positive");
+        }
+        std::vector<std::pair<std::shared_ptr<Matrix>, std::shared_ptr<Matrix>>> params =
+            as_sequential_mut(model).parameters();
+        if (params.empty())
+        {
+            throw std::invalid_argument("sequential model has no linear parameters; add at least one linear layer");
+        }
+        auto handle = std::make_unique<CTorchNNOptimizer>();
+        handle->value = std::make_unique<ml::NNOptimizer>(
+            std::move(params),
+            learning_rate,
+            batch_size,
+            as_nn_optim_type(optim_type),
+            beta1,
+            beta2,
+            epsilon,
+            rho,
+            weight_decay);
+        return handle.release();
+    }, nullptr);
+}
+
+void ctorch_nn_optimizer_destroy(CTorchNNOptimizer* optimizer)
+{
+    delete optimizer;
+}
+
+bool ctorch_nn_optimizer_zero_grad(CTorchNNOptimizer* optimizer)
+{
+    return run_api<bool>([&]() -> bool {
+        as_nn_optimizer_mut(optimizer).zero_grad();
+        return true;
+    }, false);
+}
+
+bool ctorch_nn_optimizer_step(CTorchNNOptimizer* optimizer)
+{
+    return run_api<bool>([&]() -> bool {
+        as_nn_optimizer_mut(optimizer).step();
         return true;
     }, false);
 }

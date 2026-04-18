@@ -9,25 +9,42 @@ The repository contains:
 
 This codebase is primarily experiment-driven and educational/research oriented.
 
+## Quick reference
+
+### Run a Python file with `ctorch` bindings
+
+Build the `ctorch_c` shared library first (see [optional Python bindings](#optional-python-bindings-ctypes)). From the repository root:
+
+```bash
+make py FILE=your_script.py
+```
+
+Equivalent:
+
+```bash
+PYTHONPATH="$PWD/python" python3 your_script.py
+```
+
 ## Table of contents
 
-1. [Repository layout](#repository-layout)
-2. [Implemented components](#implemented-components)
-3. [Requirements](#requirements)
-4. [Build and run](#build-and-run)
-5. [Experiments](#experiments)
-6. [Data and artifacts](#data-and-artifacts)
-7. [Known limitations](#known-limitations)
-8. [Contributing](#contributing)
-9. [Kernel SVM and Random Fourier notes](#kernel-svm-and-random-fourier-notes)
-10. [Future work](#future-work)
-11. [Project proposal](#project-proposal)
+1. [Quick reference](#quick-reference)
+2. [Repository layout](#repository-layout)
+3. [Implemented components](#implemented-components)
+4. [Requirements](#requirements)
+5. [Build and run](#build-and-run)
+6. [Experiments](#experiments)
+7. [Data and artifacts](#data-and-artifacts)
+8. [Known limitations](#known-limitations)
+9. [Contributing](#contributing)
+10. [Kernel SVM and Random Fourier notes](#kernel-svm-and-random-fourier-notes)
+11. [Future work](#future-work)
+12. [Project proposal](#project-proposal)
 
 ## Repository layout
 
 ```text
 .
-├── Makefile            # convenience: make build / make test
+├── Makefile            # convenience: make build / make test / make py FILE=...
 ├── CMakeLists.txt      # unified build (classification + ndtictactoe + optional recommender)
 ├── scripts/            # e.g. git-untrack-artifacts.sh
 ├── lib/
@@ -132,6 +149,7 @@ To skip tests (no network fetch for googletest): `cmake -B build -DCTORCH_BUILD_
 ```bash
 make build    # cmake -B build && cmake --build build
 make test     # build + ctest
+make py FILE=your_script.py   # python3 with PYTHONPATH=./python (ctorch bindings)
 make classification   # make -C experiments/classification
 make ndtictactoe     # make -C experiments/ndtictactoe
 ```
@@ -166,7 +184,9 @@ cmake -B build -DCTORCH_BUILD_TESTS=OFF -DCTORCH_BUILD_PYTHON_BINDINGS=ON -DCMAK
 cmake --build build --target ctorch_c --parallel
 ```
 
-Run from the repo root:
+Run from the repo root (see [Quick reference](#quick-reference) for `make py FILE=...`).
+
+Inline snippet:
 
 ```bash
 PYTHONPATH="$PWD/python" python3 - <<'PY'

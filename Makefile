@@ -1,6 +1,7 @@
 # Root driver for C-torch (CMake is canonical). Examples:
 #   make build          # configure + compile default targets
 #   make test           # build + ctest
+#   make py FILE=foo.py # run a Python script with PYTHONPATH=./python (ctorch bindings)
 #   make classification # only the Iris experiment (Make in subdir)
 #
 # Recommender via CMake (needs libcurl, Python dev headers, NumPy):
@@ -11,16 +12,21 @@ BUILD_DIR ?= build
 CMAKE ?= cmake
 CMAKE_FLAGS ?= -DCMAKE_BUILD_TYPE=Release
 
-.PHONY: help configure build test clean classification ndtictactoe recommender-cmake
+.PHONY: help configure build test clean classification ndtictactoe recommender-cmake py
 
 help:
 	@echo "Targets:"
 	@echo "  make configure   - $(CMAKE) -B $(BUILD_DIR) $(CMAKE_FLAGS) ."
 	@echo "  make build       - configure then compile (classification, tictactoe, ttt_main, tests)"
 	@echo "  make test        - build then ctest --output-on-failure"
+	@echo "  make py FILE=... - python3 FILE with PYTHONPATH=$(CURDIR)/python (ctorch bindings)"
 	@echo "  make classification / ndtictactoe - build experiments with their Makefiles"
 	@echo "  make recommender-cmake - print CMake line to build recommender (optional deps)"
 	@echo "  make clean       - rm -rf $(BUILD_DIR)"
+
+py:
+	@test -n "$(FILE)" || (echo "Usage: make py FILE=your_script.py" >&2 && false)
+	PYTHONPATH="$(CURDIR)/python" python3 $(FILE)
 
 configure:
 	$(CMAKE) -B $(BUILD_DIR) $(CMAKE_FLAGS) .
