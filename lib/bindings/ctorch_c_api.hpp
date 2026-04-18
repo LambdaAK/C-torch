@@ -209,6 +209,13 @@ bool ctorch_kernel_svm_score(
     const CTorchMatrix* x_test,
     const CTorchMatrix* y_test,
     double* out_score);
+bool ctorch_kernel_compute(
+    const CTorchMatrix* x,
+    const CTorchMatrix* y,
+    CTorchKernelType kernel_type,
+    double gamma,
+    double* out_value);
+CTorchExpr* ctorch_kernel_svm_loss_expr(CTorchKernelSVM* model);
 
 CTorchRandomFourierSVM* ctorch_random_fourier_svm_create(
     const CTorchMatrix* x_train,

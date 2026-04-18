@@ -417,6 +417,15 @@ const ml::KernelSVM& as_kernel_svm_ref(const CTorchKernelSVM* handle)
     return *handle->value;
 }
 
+ml::KernelSVM& as_kernel_svm_mut(CTorchKernelSVM* handle)
+{
+    if (handle == nullptr || handle->value == nullptr)
+    {
+        throw std::invalid_argument("kernel svm handle is null");
+    }
+    return *handle->value;
+}
+
 const ml::RandomFourierSVM& as_random_fourier_svm_ref(const CTorchRandomFourierSVM* handle)
 {
     if (handle == nullptr || handle->value == nullptr)
@@ -1044,6 +1053,35 @@ bool ctorch_kernel_svm_score(
             as_matrix_ref(y_test));
         return true;
     }, false);
+}
+
+bool ctorch_kernel_compute(
+    const CTorchMatrix* x,
+    const CTorchMatrix* y,
+    CTorchKernelType kernel_type,
+    double gamma,
+    double* out_value)
+{
+    return run_api<bool>([&]() -> bool {
+        if (out_value == nullptr)
+        {
+            throw std::invalid_argument("out_value pointer is null");
+        }
+        *out_value = ml::Kernels::kernel(
+            as_matrix_ref(x),
+            as_matrix_ref(y),
+            as_kernel_options(kernel_type, gamma));
+        return true;
+    }, false);
+}
+
+CTorchExpr* ctorch_kernel_svm_loss_expr(CTorchKernelSVM* model)
+{
+    return run_api<CTorchExpr*>([&]() -> CTorchExpr* {
+        auto handle = std::make_unique<CTorchExpr>();
+        handle->node = as_kernel_svm_mut(model).loss_function();
+        return handle.release();
+    }, nullptr);
 }
 
 CTorchRandomFourierSVM* ctorch_random_fourier_svm_create(
