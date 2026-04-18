@@ -223,6 +223,39 @@ ml::KernelOptions as_kernel_options(CTorchKernelType kernel_type, double gamma)
     }
 }
 
+Matrix apply_data_augmentation(
+    const Matrix& x,
+    CTorchDataAugmentationType augmentation,
+    int d_features,
+    double gamma)
+{
+    switch (augmentation)
+    {
+    case CTORCH_AUGMENT_NO_OP:
+        return DataAugmentor::no_op(x);
+    case CTORCH_AUGMENT_POLY_2:
+        return DataAugmentor::poly_2(x);
+    case CTORCH_AUGMENT_POLY_3:
+        return DataAugmentor::poly_3(x);
+    case CTORCH_AUGMENT_POLY_4:
+        return DataAugmentor::poly_4(x);
+    case CTORCH_AUGMENT_POLY_5:
+        return DataAugmentor::poly_5(x);
+    case CTORCH_AUGMENT_RFF:
+        if (d_features <= 0)
+        {
+            throw std::invalid_argument("d_features must be positive");
+        }
+        if (gamma <= 0.0)
+        {
+            throw std::invalid_argument("gamma must be positive");
+        }
+        return DataAugmentor::random_fourier_features(x, d_features, gamma);
+    default:
+        throw std::invalid_argument("invalid data augmentation type");
+    }
+}
+
 } // namespace
 
 static ml::NNOptimType as_nn_optim_type(CTorchNNOptimType optim_type)
@@ -352,6 +385,13 @@ Matrix& as_matrix_mut(CTorchMatrix* handle)
         throw std::invalid_argument("matrix handle is null");
     }
     return handle->value;
+}
+
+CTorchMatrix* make_matrix_handle(Matrix value)
+{
+    auto handle = std::make_unique<CTorchMatrix>();
+    handle->value = std::move(value);
+    return handle.release();
 }
 
 const ml::KNN& as_knn_ref(const CTorchKNN* handle)
@@ -664,9 +704,60 @@ CTorchMatrix* ctorch_matrix_matmul(const CTorchMatrix* lhs, const CTorchMatrix* 
 CTorchMatrix* ctorch_matrix_transpose(const CTorchMatrix* matrix)
 {
     return run_api<CTorchMatrix*>([&]() -> CTorchMatrix* {
-        auto out = std::make_unique<CTorchMatrix>();
-        out->value = as_matrix_ref(matrix).transpose();
-        return out.release();
+        return make_matrix_handle(as_matrix_ref(matrix).transpose());
+    }, nullptr);
+}
+
+CTorchMatrix* ctorch_data_augment_no_op(const CTorchMatrix* x)
+{
+    return run_api<CTorchMatrix*>([&]() -> CTorchMatrix* {
+        return make_matrix_handle(DataAugmentor::no_op(as_matrix_ref(x)));
+    }, nullptr);
+}
+
+CTorchMatrix* ctorch_data_augment_poly_2(const CTorchMatrix* x)
+{
+    return run_api<CTorchMatrix*>([&]() -> CTorchMatrix* {
+        return make_matrix_handle(DataAugmentor::poly_2(as_matrix_ref(x)));
+    }, nullptr);
+}
+
+CTorchMatrix* ctorch_data_augment_poly_3(const CTorchMatrix* x)
+{
+    return run_api<CTorchMatrix*>([&]() -> CTorchMatrix* {
+        return make_matrix_handle(DataAugmentor::poly_3(as_matrix_ref(x)));
+    }, nullptr);
+}
+
+CTorchMatrix* ctorch_data_augment_poly_4(const CTorchMatrix* x)
+{
+    return run_api<CTorchMatrix*>([&]() -> CTorchMatrix* {
+        return make_matrix_handle(DataAugmentor::poly_4(as_matrix_ref(x)));
+    }, nullptr);
+}
+
+CTorchMatrix* ctorch_data_augment_poly_5(const CTorchMatrix* x)
+{
+    return run_api<CTorchMatrix*>([&]() -> CTorchMatrix* {
+        return make_matrix_handle(DataAugmentor::poly_5(as_matrix_ref(x)));
+    }, nullptr);
+}
+
+CTorchMatrix* ctorch_data_augment_rff(const CTorchMatrix* x, int d_features, double gamma)
+{
+    return run_api<CTorchMatrix*>([&]() -> CTorchMatrix* {
+        return make_matrix_handle(apply_data_augmentation(as_matrix_ref(x), CTORCH_AUGMENT_RFF, d_features, gamma));
+    }, nullptr);
+}
+
+CTorchMatrix* ctorch_data_augment_dispatch(
+    const CTorchMatrix* x,
+    CTorchDataAugmentationType augmentation,
+    int d_features,
+    double gamma)
+{
+    return run_api<CTorchMatrix*>([&]() -> CTorchMatrix* {
+        return make_matrix_handle(apply_data_augmentation(as_matrix_ref(x), augmentation, d_features, gamma));
     }, nullptr);
 }
 

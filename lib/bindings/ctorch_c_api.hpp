@@ -107,6 +107,17 @@ CTorchMatrix* ctorch_matrix_sub(const CTorchMatrix* lhs, const CTorchMatrix* rhs
 CTorchMatrix* ctorch_matrix_mul_scalar(const CTorchMatrix* matrix, double scalar);
 CTorchMatrix* ctorch_matrix_matmul(const CTorchMatrix* lhs, const CTorchMatrix* rhs);
 CTorchMatrix* ctorch_matrix_transpose(const CTorchMatrix* matrix);
+CTorchMatrix* ctorch_data_augment_no_op(const CTorchMatrix* x);
+CTorchMatrix* ctorch_data_augment_poly_2(const CTorchMatrix* x);
+CTorchMatrix* ctorch_data_augment_poly_3(const CTorchMatrix* x);
+CTorchMatrix* ctorch_data_augment_poly_4(const CTorchMatrix* x);
+CTorchMatrix* ctorch_data_augment_poly_5(const CTorchMatrix* x);
+CTorchMatrix* ctorch_data_augment_rff(const CTorchMatrix* x, int d_features, double gamma);
+CTorchMatrix* ctorch_data_augment_dispatch(
+    const CTorchMatrix* x,
+    CTorchDataAugmentationType augmentation,
+    int d_features,
+    double gamma);
 
 CTorchKNN* ctorch_knn_create(size_t k, const CTorchMatrix* x_train, const CTorchMatrix* y_train);
 void ctorch_knn_destroy(CTorchKNN* model);
