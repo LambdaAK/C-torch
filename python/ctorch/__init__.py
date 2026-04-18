@@ -155,6 +155,8 @@ _lib.ctorch_matrix_set.restype = ct.c_bool
 
 _lib.ctorch_matrix_to_array.argtypes = [ct.c_void_p, ct.POINTER(ct.c_double), ct.c_size_t]
 _lib.ctorch_matrix_to_array.restype = ct.c_bool
+_lib.ctorch_matrix_equals.argtypes = [ct.c_void_p, ct.c_void_p, ct.POINTER(ct.c_bool)]
+_lib.ctorch_matrix_equals.restype = ct.c_bool
 
 _lib.ctorch_matrix_add.argtypes = [ct.c_void_p, ct.c_void_p]
 _lib.ctorch_matrix_add.restype = ct.c_void_p
@@ -774,6 +776,9 @@ class Matrix:
             raise _raise_last_error("Matrix.row failed")
         return Matrix(_ptr=ptr)
 
+    def rows(self) -> list[Matrix]:
+        return [self.row(i) for i in range(self.num_rows)]
+
     def l2_norm_cols(self) -> Matrix:
         ptr = _lib.ctorch_matrix_l2_norm_cols(self._ptr)
         if not ptr:
@@ -884,6 +889,38 @@ class Matrix:
 
     def __rmul__(self, scalar: float) -> Matrix:
         return self.__mul__(scalar)
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Matrix):
+            return NotImplemented
+        out = ct.c_bool()
+        ok = _lib.ctorch_matrix_equals(self._ptr, other._ptr, ct.byref(out))
+        if not ok:
+            raise _raise_last_error("Matrix.__eq__ failed")
+        return bool(out.value)
+
+    def __str__(self) -> str:
+        row_count, col_count = self.shape
+        if row_count == 0 or col_count == 0:
+            return f"Matrix({row_count}x{col_count}) []"
+
+        max_rows = 4
+        max_cols = 6
+
+        def _fmt(value: float) -> str:
+            return f"{value:.6g}"
+
+        rendered_rows: list[str] = []
+        preview_rows = min(row_count, max_rows)
+        preview_cols = min(col_count, max_cols)
+        for i in range(preview_rows):
+            rendered = ", ".join(_fmt(self.get(i, j)) for j in range(preview_cols))
+            if col_count > max_cols:
+                rendered = f"{rendered}, ..."
+            rendered_rows.append(f"[{rendered}]")
+        if row_count > max_rows:
+            rendered_rows.append("...")
+        return f"Matrix({row_count}x{col_count}) [{', '.join(rendered_rows)}]"
 
     def __repr__(self) -> str:
         return f"Matrix(shape={self.shape}, data={self.to_list()})"
