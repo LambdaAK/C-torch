@@ -25,6 +25,8 @@ __all__ = [
     "NNOptimizer",
     "OptimType",
     "DataAugmentationType",
+    "augment_data",
+    "random_fourier_features",
     "KernelType",
     "kernel_value",
     "NNOptimType",
@@ -169,6 +171,20 @@ _lib.ctorch_matrix_matmul.argtypes = [ct.c_void_p, ct.c_void_p]
 _lib.ctorch_matrix_matmul.restype = ct.c_void_p
 _lib.ctorch_matrix_transpose.argtypes = [ct.c_void_p]
 _lib.ctorch_matrix_transpose.restype = ct.c_void_p
+_lib.ctorch_data_augment_no_op.argtypes = [ct.c_void_p]
+_lib.ctorch_data_augment_no_op.restype = ct.c_void_p
+_lib.ctorch_data_augment_poly_2.argtypes = [ct.c_void_p]
+_lib.ctorch_data_augment_poly_2.restype = ct.c_void_p
+_lib.ctorch_data_augment_poly_3.argtypes = [ct.c_void_p]
+_lib.ctorch_data_augment_poly_3.restype = ct.c_void_p
+_lib.ctorch_data_augment_poly_4.argtypes = [ct.c_void_p]
+_lib.ctorch_data_augment_poly_4.restype = ct.c_void_p
+_lib.ctorch_data_augment_poly_5.argtypes = [ct.c_void_p]
+_lib.ctorch_data_augment_poly_5.restype = ct.c_void_p
+_lib.ctorch_data_augment_rff.argtypes = [ct.c_void_p, ct.c_int, ct.c_double]
+_lib.ctorch_data_augment_rff.restype = ct.c_void_p
+_lib.ctorch_data_augment_dispatch.argtypes = [ct.c_void_p, ct.c_int, ct.c_int, ct.c_double]
+_lib.ctorch_data_augment_dispatch.restype = ct.c_void_p
 
 _lib.ctorch_knn_create.argtypes = [ct.c_size_t, ct.c_void_p, ct.c_void_p]
 _lib.ctorch_knn_create.restype = ct.c_void_p
@@ -980,6 +996,41 @@ class Matrix:
         if ptr:
             _lib.ctorch_matrix_destroy(ptr)
             self._ptr = ct.c_void_p()
+
+
+def random_fourier_features(
+    x: Matrix | Sequence[object],
+    d_features: int,
+    gamma: float,
+) -> Matrix:
+    x_mat = _coerce_matrix(x)
+    ptr = _lib.ctorch_data_augment_rff(
+        x_mat._ptr,
+        int(d_features),
+        float(gamma),
+    )
+    if not ptr:
+        raise _raise_last_error("random_fourier_features failed")
+    return Matrix(_ptr=ptr)
+
+
+def augment_data(
+    x: Matrix | Sequence[object],
+    augmentation: DataAugmentationType | int = DataAugmentationType.NO_OP,
+    d_features: int = 64,
+    gamma: float = 1.0,
+) -> Matrix:
+    x_mat = _coerce_matrix(x)
+    augment = _coerce_enum(augmentation, DataAugmentationType, "augmentation")
+    ptr = _lib.ctorch_data_augment_dispatch(
+        x_mat._ptr,
+        int(augment),
+        int(d_features),
+        float(gamma),
+    )
+    if not ptr:
+        raise _raise_last_error("augment_data failed")
+    return Matrix(_ptr=ptr)
 
 
 class KNN:
