@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 __all__ = [
+    "__version__",
     "Matrix",
     "KNN",
     "LinearRegression",
@@ -42,6 +43,8 @@ __all__ = [
     "QuadraticProgramResult",
     "solve_quadratic_program",
 ]
+
+__version__ = "0.1.0"
 
 
 class OptimType(IntEnum):

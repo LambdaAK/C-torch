@@ -11,8 +11,9 @@
 BUILD_DIR ?= build
 CMAKE ?= cmake
 CMAKE_FLAGS ?= -DCMAKE_BUILD_TYPE=Release
+PYTHON ?= python3
 
-.PHONY: help configure build test clean classification ndtictactoe recommender-cmake py
+.PHONY: help configure build test clean classification ndtictactoe recommender-cmake py py-bindings py-wheel
 
 help:
 	@echo "Targets:"
@@ -20,13 +21,22 @@ help:
 	@echo "  make build       - configure then compile (classification, tictactoe, ttt_main, tests)"
 	@echo "  make test        - build then ctest --output-on-failure"
 	@echo "  make py FILE=... - python3 FILE with PYTHONPATH=$(CURDIR)/python (ctorch bindings)"
+	@echo "  make py-bindings - build ctorch_c shared library (required by Python package)"
+	@echo "  make py-wheel    - build wheel in ./dist after staging native ctorch_c library"
 	@echo "  make classification / ndtictactoe - build experiments with their Makefiles"
 	@echo "  make recommender-cmake - print CMake line to build recommender (optional deps)"
 	@echo "  make clean       - rm -rf $(BUILD_DIR)"
 
 py:
 	@test -n "$(FILE)" || (echo "Usage: make py FILE=your_script.py" >&2 && false)
-	PYTHONPATH="$(CURDIR)/python" python3 $(FILE)
+	PYTHONPATH="$(CURDIR)/python" $(PYTHON) $(FILE)
+
+py-bindings:
+	$(CMAKE) -B $(BUILD_DIR) -DCTORCH_BUILD_TESTS=OFF -DCTORCH_BUILD_PYTHON_BINDINGS=ON $(CMAKE_FLAGS) .
+	$(CMAKE) --build $(BUILD_DIR) --target ctorch_c --parallel
+
+py-wheel:
+	BUILD_DIR="$(BUILD_DIR)" PYTHON_BIN="$(PYTHON)" bash scripts/build_python_wheel.sh
 
 configure:
 	$(CMAKE) -B $(BUILD_DIR) $(CMAKE_FLAGS) .

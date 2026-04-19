@@ -25,6 +25,14 @@ Equivalent:
 PYTHONPATH="$PWD/python" python3 your_script.py
 ```
 
+### Build a wheel for Python bindings
+
+From the repository root:
+
+```bash
+make py-wheel
+```
+
 ## Table of contents
 
 1. [Quick reference](#quick-reference)
@@ -44,9 +52,10 @@ PYTHONPATH="$PWD/python" python3 your_script.py
 
 ```text
 .
-├── Makefile            # convenience: make build / make test / make py FILE=...
+├── Makefile            # convenience: make build / make test / make py FILE=... / make py-wheel
 ├── CMakeLists.txt      # unified build (classification + ndtictactoe + optional recommender)
 ├── scripts/            # e.g. git-untrack-artifacts.sh
+├── examples/python/    # typed train/infer workflow for Python bindings
 ├── lib/
 │   ├── math/           # matrix ops, AST, differentiator, optimizers, augmentation
 │   └── ml/             # ML models and utilities
@@ -150,6 +159,8 @@ To skip tests (no network fetch for googletest): `cmake -B build -DCTORCH_BUILD_
 make build    # cmake -B build && cmake --build build
 make test     # build + ctest
 make py FILE=your_script.py   # python3 with PYTHONPATH=./python (ctorch bindings)
+make py-bindings   # builds build/libctorch_c.{dylib,so,dll}
+make py-wheel      # builds dist/*.whl (stages native library first)
 make classification   # make -C experiments/classification
 make ndtictactoe     # make -C experiments/ndtictactoe
 ```
@@ -185,6 +196,16 @@ cmake --build build --target ctorch_c --parallel
 ```
 
 Run from the repo root (see [Quick reference](#quick-reference) for `make py FILE=...`).
+
+Install as a typed package (PEP 561) in editable mode:
+
+```bash
+cmake -B build -DCTORCH_BUILD_TESTS=OFF -DCTORCH_BUILD_PYTHON_BINDINGS=ON -DCMAKE_BUILD_TYPE=Release
+cmake --build build --target ctorch_c --parallel
+CTORCH_LIB_PATH="$PWD/build/libctorch_c.dylib" python3 -m pip install -e .
+```
+
+On Linux, use `libctorch_c.so` for `CTORCH_LIB_PATH`.
 
 Inline snippet:
 
@@ -229,6 +250,15 @@ PY
 ```
 
 If your shared library is not in `build/`, set `CTORCH_LIB_PATH` to the built `libctorch_c` path.
+
+Typed train/infer workflow example:
+
+```bash
+python3 examples/python/train_infer_sequential.py train --model-path artifacts/py_models/line.model
+python3 examples/python/train_infer_sequential.py infer --model-path artifacts/py_models/line.model --x 1.75
+```
+
+More package notes: [`python/README.md`](python/README.md).
 
 ### Make (per experiment)
 

@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=58", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ctorch"
+version = "0.1.0"
+description = "Typed ctypes bindings for the C-torch C++ machine-learning toolkit."
+readme = "python/README.md"
+requires-python = ">=3.9"
+dependencies = []
+
+[tool.setuptools]
+package-dir = {"" = "python"}
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["python"]
+
+[tool.setuptools.package-data]
+ctorch = ["py.typed", "*.so", "*.dylib", "*.dll"]

@@ -28,6 +28,8 @@ _deps/
 *.model
 __pycache__/
 *.pyc
+dist/
+*.egg-info/
 
 # RL sweep/checkpoint trees (keep local only; use scripts/git-untrack-artifacts.sh if already committed)
 experiments/ndtictactoe/models-and-data/
