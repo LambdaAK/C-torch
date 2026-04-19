@@ -53,9 +53,10 @@ make py-wheel
 ```text
 .
 ├── Makefile            # convenience: make build / make test / make py FILE=... / make py-wheel
-├── CMakeLists.txt      # unified build (classification + ndtictactoe + optional recommender)
+├── CMakeLists.txt      # unified build (classification + ndtictactoe + demos + optional recommender)
 ├── scripts/            # e.g. git-untrack-artifacts.sh
 ├── examples/python/    # typed train/infer workflow for Python bindings
+├── demos/              # self-contained demonstration programs (C++ and Python)
 ├── lib/
 │   ├── math/           # matrix ops, AST, differentiator, optimizers, augmentation
 │   └── ml/             # ML models and utilities
@@ -140,8 +141,8 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --parallel
 ```
 
-This produces `build/classification`, `build/tictactoe`, and `build/ttt_main`.  
-Include paths use `-I lib` so sources include headers as `"math/..."` and `"ml/..."`.
+This produces `build/classification`, `build/tictactoe`, `build/ttt_main`, and the demo targets under `build/demos/`.
+The Kernel SVM demo also has a Python bindings version at `demos/kernel/main.py`.
 
 Unit tests (GoogleTest, fetched on first configure) build with the default `CTORCH_BUILD_TESTS=ON`:
 
@@ -161,6 +162,9 @@ make test     # build + ctest
 make py FILE=your_script.py   # python3 with PYTHONPATH=./python (ctorch bindings)
 make py-bindings   # builds build/libctorch_c.{dylib,so,dll}
 make py-wheel      # builds dist/*.whl (stages native library first)
+make kernel-demo   # builds the concentric-circles Kernel SVM demo
+make linear-regression-demo   # builds the noisy line regression demo
+make logistic-regression-demo # builds the blob classification demo
 make classification   # make -C experiments/classification
 make ndtictactoe     # make -C experiments/ndtictactoe
 ```

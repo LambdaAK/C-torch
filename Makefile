@@ -13,7 +13,7 @@ CMAKE ?= cmake
 CMAKE_FLAGS ?= -DCMAKE_BUILD_TYPE=Release
 PYTHON ?= python3
 
-.PHONY: help configure build test clean classification ndtictactoe recommender-cmake py py-bindings py-wheel
+.PHONY: help configure build test clean classification ndtictactoe kernel-demo linear-regression-demo logistic-regression-demo recommender-cmake py py-bindings py-wheel
 
 help:
 	@echo "Targets:"
@@ -23,6 +23,9 @@ help:
 	@echo "  make py FILE=... - python3 FILE with PYTHONPATH=$(CURDIR)/python (ctorch bindings)"
 	@echo "  make py-bindings - build ctorch_c shared library (required by Python package)"
 	@echo "  make py-wheel    - build wheel in ./dist after staging native ctorch_c library"
+	@echo "  make kernel-demo - build the concentric-circles Kernel SVM demo"
+	@echo "  make linear-regression-demo - build the noisy line Linear Regression demo"
+	@echo "  make logistic-regression-demo - build the two-blob Logistic Regression demo"
 	@echo "  make classification / ndtictactoe - build experiments with their Makefiles"
 	@echo "  make recommender-cmake - print CMake line to build recommender (optional deps)"
 	@echo "  make clean       - rm -rf $(BUILD_DIR)"
@@ -55,6 +58,15 @@ classification:
 
 ndtictactoe:
 	$(MAKE) -C experiments/ndtictactoe
+
+kernel-demo: configure
+	$(CMAKE) --build $(BUILD_DIR) --target kernel_circle_demo --parallel
+
+linear-regression-demo: configure
+	$(CMAKE) --build $(BUILD_DIR) --target linear_regression_demo --parallel
+
+logistic-regression-demo: configure
+	$(CMAKE) --build $(BUILD_DIR) --target logistic_regression_demo --parallel
 
 recommender-cmake:
 	@echo "$(CMAKE) -B $(BUILD_DIR) -DCTORCH_BUILD_RECOMMENDER=ON $(CMAKE_FLAGS) . && $(CMAKE) --build $(BUILD_DIR) --target recommender"

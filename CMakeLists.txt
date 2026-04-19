@@ -96,6 +96,8 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
     target_compile_options(ttt_main PRIVATE -Wall -Wextra)
 endif()
 
+add_subdirectory(demos)
+
 option(CTORCH_BUILD_TESTS "Build GoogleTest unit tests (downloads googletest)" ON)
 include(CTest)
 if(CTORCH_BUILD_TESTS)
