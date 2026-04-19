@@ -1,5 +1,9 @@
 #include <gtest/gtest.h>
 #include <algorithm>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
+#include <vector>
 #include "dqn.hpp"
 #include "math/matrix.hpp"
 #include "ml/nn.hpp"
@@ -70,4 +74,45 @@ TEST(Sequential, CopyParametersFromSyncsWeights) {
     for (size_t i = 0; i < ya.numRows(); ++i) {
         EXPECT_NEAR(ya(i, 0), yb(i, 0), 1e-9);
     }
+}
+
+TEST(Sequential, LoadRejectsTruncatedFile) {
+    ml::Sequential model;
+    model.add_layer(std::make_shared<ml::LinearLayer>(2, 3));
+    model.add_layer(std::make_shared<ml::ReLULayer>());
+    model.add_layer(std::make_shared<ml::LinearLayer>(3, 1));
+
+    const std::string path = "sequential_truncated_test.bin";
+    ASSERT_TRUE(model.save(path));
+
+    std::ifstream in(path, std::ios::binary);
+    ASSERT_TRUE(in.is_open());
+    std::vector<char> bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    in.close();
+    ASSERT_GT(bytes.size(), 1u);
+
+    bytes.pop_back();
+    std::ofstream out(path, std::ios::binary | std::ios::trunc);
+    ASSERT_TRUE(out.is_open());
+    out.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
+    out.close();
+
+    EXPECT_FALSE(model.load(path));
+    std::filesystem::remove(path);
+}
+
+TEST(DQN, InvalidUpdateFrequencyThrows) {
+    ml::Sequential q;
+    q.add_layer(std::make_shared<ml::LinearLayer>(2, 4));
+    q.add_layer(std::make_shared<ml::ReLULayer>());
+    q.add_layer(std::make_shared<ml::LinearLayer>(4, 3));
+
+    ml::Sequential t;
+    t.add_layer(std::make_shared<ml::LinearLayer>(2, 4));
+    t.add_layer(std::make_shared<ml::ReLULayer>());
+    t.add_layer(std::make_shared<ml::LinearLayer>(4, 3));
+
+    EXPECT_THROW(
+        DQNAgent(q, t, 0.1f, 0.01f, 0.99f, 0.9f, 0.001f, 8, 200, 0),
+        std::invalid_argument);
 }

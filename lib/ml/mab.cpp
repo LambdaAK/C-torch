@@ -1,9 +1,20 @@
 #include "mab.hpp"
+#include <stdexcept>
 
 namespace ml
 {
 
-  MAB::MAB(int n_arms, float eps) : n_arms(n_arms), eps(eps), counts(n_arms, 0), values(n_arms, 0.0) {}
+  MAB::MAB(int n_arms, float eps) : n_arms(n_arms), eps(eps), counts(n_arms, 0), values(n_arms, 0.0)
+  {
+    if (n_arms <= 0)
+    {
+      throw std::invalid_argument("MAB: n_arms must be positive.");
+    }
+    if (eps < 0.0f || eps > 1.0f)
+    {
+      throw std::invalid_argument("MAB: epsilon must be in [0, 1].");
+    }
+  }
 
   int MAB::select_arms()
   {
@@ -29,6 +40,10 @@ namespace ml
 
   void MAB::update(int arm, double reward)
   {
+    if (arm < 0 || arm >= n_arms)
+    {
+      throw std::out_of_range("MAB::update arm index out of range.");
+    }
     counts[arm] += 1;
     const double n = static_cast<double>(counts[arm]);
     values[arm] += (reward - values[arm]) / n;
@@ -36,6 +51,10 @@ namespace ml
 
   void MAB::set_epsilon(float eps)
   {
+    if (eps < 0.0f || eps > 1.0f)
+    {
+      throw std::invalid_argument("MAB::set_epsilon epsilon must be in [0, 1].");
+    }
     this->eps = eps;
   }
 

@@ -1,9 +1,17 @@
 #include "replaymemory.hpp"
+#include <stdexcept>
   
-ReplayMemory::ReplayMemory(size_t capacity) : capacity(capacity) {}
+ReplayMemory::ReplayMemory(size_t capacity) : capacity(capacity) {
+  if (capacity == 0) {
+    throw std::invalid_argument("ReplayMemory capacity must be positive.");
+  }
+}
 
 // sample: state, action, reward, next_state, done
 void ReplayMemory::add(Sample& s) {
+  if (capacity == 0) {
+    throw std::logic_error("ReplayMemory capacity is zero.");
+  }
 
   if (memory.size() >= capacity) {
     memory.pop_front();

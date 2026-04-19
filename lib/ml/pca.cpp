@@ -4,6 +4,12 @@
 namespace ml {
 
   PCA::PCA(const Matrix& X) {
+    if (X.numRows() < 2) {
+      throw std::invalid_argument("PCA requires at least two samples.");
+    }
+    if (X.numCols() == 0) {
+      throw std::invalid_argument("PCA requires at least one feature.");
+    }
     // Add small regularization for numerical stability
     float reg = (X.numRows() < 200) ? 1e-5 : 0;
     Cov = 1.0/(X.numRows() - 1) * X.transpose() * X + reg * Matrix::eye(X.numCols());

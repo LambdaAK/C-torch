@@ -32,3 +32,9 @@ TEST(Matrix, CopyAssignment) {
     b(0, 0) = 9.0;
     EXPECT_DOUBLE_EQ(a(0, 0), 1.0);
 }
+
+TEST(Matrix, EmptyInitializerListCreatesZeroByZero) {
+    Matrix m({});
+    EXPECT_EQ(m.numRows(), 0u);
+    EXPECT_EQ(m.numCols(), 0u);
+}

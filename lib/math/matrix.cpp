@@ -9,8 +9,16 @@ Matrix::Matrix(size_t rows, size_t cols)
     : rows(rows), cols(cols), data(rows * cols, 0.0) {}
 
 // Constructor: Uses double initializer list to construct the matrix
-Matrix::Matrix(std::initializer_list<std::initializer_list<double>> init_list) : rows(init_list.size()), cols(init_list.begin()->size()), data(rows * cols)
+Matrix::Matrix(std::initializer_list<std::initializer_list<double>> init_list)
+    : rows(init_list.size()),
+      cols(init_list.size() == 0 ? 0 : init_list.begin()->size()),
+      data(rows * cols)
 {
+    if (rows == 0)
+    {
+        return;
+    }
+
     size_t i = 0;
     // Validate all rows are the same size
     for (const auto &row : init_list)

@@ -3,6 +3,7 @@
 #include "math/dataaugmentor.hpp"
 #include <random>
 #include <cmath>
+#include <stdexcept>
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
@@ -12,6 +13,23 @@ namespace ml
 {
     RandomFourierSVM::RandomFourierSVM(Matrix xTr, Matrix yTr, int D, double gamma, double learning_rate, int max_iter, double C)
     {
+        if (D <= 0)
+        {
+            throw std::invalid_argument("RandomFourierSVM: D must be positive.");
+        }
+        if (!std::isfinite(gamma) || gamma <= 0.0)
+        {
+            throw std::invalid_argument("RandomFourierSVM: gamma must be finite and positive.");
+        }
+        if (yTr.numRows() != 1)
+        {
+            throw std::invalid_argument("RandomFourierSVM: yTr must be a row vector (1 x N).");
+        }
+        if (xTr.numRows() != yTr.numCols())
+        {
+            throw std::invalid_argument("RandomFourierSVM: number of samples and labels must match.");
+        }
+
         // Generate random Fourier features
 
         this->D = D;
@@ -46,6 +64,11 @@ namespace ml
 
     Matrix RandomFourierSVM::transform_data(const Matrix &x) const
     {
+        if (x.numCols() != W.numCols())
+        {
+            throw std::invalid_argument("RandomFourierSVM: feature dimension mismatch.");
+        }
+
         Matrix result(x.numRows(), D);
         for (size_t i = 0; i < x.numRows(); ++i)
         {
@@ -70,8 +93,21 @@ namespace ml
 
     double RandomFourierSVM::score(const Matrix &xTe, const Matrix &yTe) const
     {
+        if (yTe.numRows() != 1)
+        {
+            throw std::invalid_argument("RandomFourierSVM::score: yTe must be a row vector (1 x N).");
+        }
+        if (xTe.numRows() != yTe.numCols())
+        {
+            throw std::invalid_argument("RandomFourierSVM::score: number of samples and labels must match.");
+        }
+        if (xTe.numRows() == 0)
+        {
+            throw std::invalid_argument("RandomFourierSVM::score: xTe must contain at least one sample.");
+        }
+
         int correct = 0;
-        int total = xTe.numRows();
+        const size_t total = xTe.numRows();
 
         for (size_t i = 0; i < total; i++)
         {
@@ -91,6 +127,6 @@ namespace ml
             }
         }
 
-        return static_cast<double>(correct) / total;
+        return static_cast<double>(correct) / static_cast<double>(total);
     }
-}
+} 

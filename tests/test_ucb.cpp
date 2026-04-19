@@ -19,3 +19,13 @@ TEST(UCB, PullsEachArmBeforeUCBFormula) {
         ucb.update(a, 0.1 * static_cast<double>(i));
     }
 }
+
+TEST(UCB, RejectsInvalidArmCount) {
+    EXPECT_THROW(ml::UCB(0), std::invalid_argument);
+}
+
+TEST(UCB, UpdateRejectsOutOfRangeArm) {
+    ml::UCB ucb(2);
+    EXPECT_THROW(ucb.update(-1, 1.0), std::out_of_range);
+    EXPECT_THROW(ucb.update(2, 1.0), std::out_of_range);
+}

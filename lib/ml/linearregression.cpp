@@ -3,6 +3,7 @@
 #include "math/ast.hpp"
 #include "math/matrix.hpp"
 #include "math/optim.hpp"
+#include <stdexcept>
 
 using math::ASTNode;
 using math::GD;
@@ -64,6 +65,27 @@ namespace ml
 
     LinearRegression::LinearRegression(Matrix xTr, Matrix yTr, double learning_rate, int max_iter)
     {
+        if (xTr.numRows() == 0 || xTr.numCols() == 0)
+        {
+            throw std::invalid_argument("xTr must be non-empty.");
+        }
+        if (yTr.numRows() != 1)
+        {
+            throw std::invalid_argument("yTr must be a row vector (1 x N).");
+        }
+        if (xTr.numRows() != yTr.numCols())
+        {
+            throw std::invalid_argument("Number of training samples and labels must be equal.");
+        }
+        if (learning_rate <= 0.0)
+        {
+            throw std::invalid_argument("learning_rate must be positive.");
+        }
+        if (max_iter <= 0)
+        {
+            throw std::invalid_argument("max_iter must be positive.");
+        }
+
         // cache everything
         this->xTr = xTr;
         this->yTr = yTr;
@@ -128,11 +150,20 @@ namespace ml
 
     double LinearRegression::predict(const Matrix &x) const
     {
+        if (x.numRows() != 1)
+        {
+            throw std::invalid_argument("x must be a row vector (1 x D).");
+        }
+        if (x.numCols() != weights.numCols())
+        {
+            throw std::invalid_argument("Feature dimension mismatch between input and trained weights.");
+        }
+
         // compute w ^ T x + b
 
         double inner_prod = 0;
 
-        for (size_t i = 0; i < x.numCols(); i++)
+        for (size_t i = 0; i < weights.numCols(); i++)
         {
             inner_prod += weights(0, i) * x(0, i);
         }
@@ -149,9 +180,21 @@ namespace ml
         {
             throw std::invalid_argument("yTe must be a row vector");
         }
+        if (xTe.numRows() != yTe.numCols())
+        {
+            throw std::invalid_argument("Number of test samples and labels must be equal.");
+        }
+        if (xTe.numCols() != weights.numCols())
+        {
+            throw std::invalid_argument("Test feature dimension must match training feature dimension.");
+        }
+        if (xTe.numRows() == 0)
+        {
+            throw std::invalid_argument("xTe must contain at least one sample.");
+        }
 
         double correct_count = 0.0;
-        size_t total_samples = yTe.numCols();
+        size_t total_samples = xTe.numRows();
 
         for (size_t i = 0; i < xTe.numRows(); ++i)
         {

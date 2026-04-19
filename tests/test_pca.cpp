@@ -56,3 +56,8 @@ TEST(PCA, InvalidKThrows) {
     EXPECT_THROW(pca.compute_projection_mat(0, 50, 1e-6f), std::invalid_argument);
     EXPECT_THROW(pca.compute_projection_mat(4, 50, 1e-6f), std::invalid_argument);
 }
+
+TEST(PCA, ConstructorRejectsInsufficientSamples) {
+    Matrix X(1, 3);
+    EXPECT_THROW(ml::PCA pca(X), std::invalid_argument);
+}

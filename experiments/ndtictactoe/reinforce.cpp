@@ -1,4 +1,5 @@
 #include "reinforce.hpp"
+#include <stdexcept>
 
 Reinforce::Reinforce(ml::Sequential policy, ml::Sequential critic, int baseline, float lr, float gamma, size_t batch_size, bool norm_traj, bool subtract_baseline, bool rew_to_go)
     : agent(policy), critic(critic), baseline(baseline), lr(lr), gamma(gamma), batch_size(batch_size), episodes(batch_size),
@@ -10,6 +11,15 @@ Reinforce::Reinforce(ml::Sequential policy, ml::Sequential critic, int baseline,
 
 int Reinforce::act(size_t batch_count, const std::vector<float> &state, const std::vector<int> &valid_actions, bool inference, bool print_logits)
 {
+  if (batch_count >= episodes.size())
+  {
+    throw std::out_of_range("Reinforce::act batch_count out of range.");
+  }
+  if (valid_actions.empty())
+  {
+    throw std::invalid_argument("Reinforce::act requires at least one valid action.");
+  }
+
   Matrix logits = agent.forward(convert_input(state));
 
   // mask for invalid actions (set to a large negative value)
@@ -85,11 +95,23 @@ int Reinforce::act(size_t batch_count, const std::vector<float> &state, const st
 
 void Reinforce::update_last_reward(size_t batch_count, float reward)
 {
+  if (batch_count >= episodes.size())
+  {
+    throw std::out_of_range("Reinforce::update_last_reward batch_count out of range.");
+  }
+  if (episodes[batch_count].empty())
+  {
+    throw std::logic_error("Reinforce::update_last_reward called before any transition was stored.");
+  }
   episodes[batch_count].back().reward = reward;
 }
 
 void Reinforce::store_transition(size_t batch_count, const std::vector<float> &state, int action, float reward, float log_prob, const Matrix &logits)
 {
+  if (batch_count >= episodes.size())
+  {
+    throw std::out_of_range("Reinforce::store_transition batch_count out of range.");
+  }
   episodes[batch_count].push_back({state, action, reward, log_prob, logits});
 }
 

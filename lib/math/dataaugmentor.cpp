@@ -1,6 +1,8 @@
 #include "dataaugmentor.hpp"
 #include <random>
 #include <cmath>
+#include <limits>
+#include <stdexcept>
 
 // Add this if M_PI is not defined
 #ifndef M_PI
@@ -83,10 +85,18 @@ Matrix DataAugmentor::poly_5(const Matrix &x) {
 }
 
 Matrix DataAugmentor::random_fourier_features(const Matrix &x, int D, double gamma) {
+    if (D <= 0) {
+        throw std::invalid_argument("random_fourier_features: D must be positive.");
+    }
+    if (!std::isfinite(gamma) || gamma <= 0.0) {
+        throw std::invalid_argument("random_fourier_features: gamma must be finite and positive.");
+    }
+
     size_t n = x.numRows();   // Number of data points
     size_t d = x.numCols();   // Input dimension
+    const size_t feature_count = static_cast<size_t>(D);
 
-    Matrix result(n, D);
+    Matrix result(n, feature_count);
 
     std::random_device rd;
     std::mt19937 gen(rd());
@@ -94,24 +104,24 @@ Matrix DataAugmentor::random_fourier_features(const Matrix &x, int D, double gam
     std::uniform_real_distribution<> uniform_dist(0, 2 * M_PI);
 
     // Create W: d × D
-    Matrix W(d, D);
+    Matrix W(d, feature_count);
     for (size_t i = 0; i < d; ++i) {
-        for (size_t j = 0; j < D; ++j) {
+        for (size_t j = 0; j < feature_count; ++j) {
             W(i, j) = normal_dist(gen);
         }
     }
 
     // Create b: 1 × D
-    Matrix b(1, D);
-    for (size_t j = 0; j < D; ++j) {
+    Matrix b(1, feature_count);
+    for (size_t j = 0; j < feature_count; ++j) {
         b(0, j) = uniform_dist(gen);
     }
 
     // Compute RFFs
-    double scale = std::sqrt(2.0 / D);
+    double scale = std::sqrt(2.0 / static_cast<double>(feature_count));
 
     for (size_t i = 0; i < n; ++i) {
-        for (size_t j = 0; j < D; ++j) {
+        for (size_t j = 0; j < feature_count; ++j) {
             double dot_product = 0.0;
             for (size_t k = 0; k < d; ++k) {
                 dot_product += x(i, k) * W(k, j);

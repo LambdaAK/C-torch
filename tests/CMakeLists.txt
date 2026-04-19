@@ -14,14 +14,19 @@ FetchContent_MakeAvailable(googletest)
 
 add_executable(ctorch_tests
     test_matrix.cpp
+    test_dataaugmentor.cpp
     test_optim_programs.cpp
     test_knn.cpp
+    test_linear_regression.cpp
     test_mab.cpp
     test_ucb.cpp
     test_pca.cpp
     test_svm.cpp
+    test_random_fourier_svm.cpp
     test_gaussian_nb.cpp
     test_dqn.cpp
+    test_reinforce.cpp
+    test_tictactoe.cpp
     test_smoke_iris.cpp
     test_replay_memory.cpp
 )
@@ -38,8 +43,10 @@ target_include_directories(ctorch_tests PRIVATE
 
 target_sources(ctorch_tests PRIVATE
     ${CMAKE_SOURCE_DIR}/experiments/ndtictactoe/dqn.cpp
+    ${CMAKE_SOURCE_DIR}/experiments/ndtictactoe/reinforce.cpp
     ${CMAKE_SOURCE_DIR}/experiments/ndtictactoe/replaymemory.cpp
     ${CMAKE_SOURCE_DIR}/experiments/ndtictactoe/sample.cpp
+    ${CMAKE_SOURCE_DIR}/experiments/ndtictactoe/tictactoe.cpp
 )
 
 include(GoogleTest)

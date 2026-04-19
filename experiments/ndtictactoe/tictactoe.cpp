@@ -1,7 +1,18 @@
 #include "tictactoe.hpp"
+#include <stdexcept>
 
-TicTacToe::TicTacToe(size_t size) : board_size(size), board(size, std::vector<int>(size, 0)), cur_player(1), game_over(false), winner(0)
+TicTacToe::TicTacToe(size_t size)
+    : board_size(size),
+      board(size, std::vector<int>(size, 0)),
+      cur_player(1),
+      game_over(false),
+      winner(0),
+      player_to_optimize_for(1)
 {
+  if (size == 0)
+  {
+    throw std::invalid_argument("TicTacToe board size must be positive.");
+  }
 }
 
 size_t TicTacToe::get_board_size() const
@@ -327,4 +338,13 @@ void TicTacToe::render() const
     std::cout << std::endl
               << separator << std::endl;
   }
+}
+
+void TicTacToe::set_player_to_optimize_for(int player)
+{
+  if (player != 1 && player != 2)
+  {
+    throw std::invalid_argument("player_to_optimize_for must be 1 or 2.");
+  }
+  player_to_optimize_for = player;
 }

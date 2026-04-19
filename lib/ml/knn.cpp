@@ -10,10 +10,21 @@ namespace ml
     // Constructor
     KNN::KNN(size_t k, Matrix xTr, Matrix yTr) : xTr(xTr), yTr(yTr), k(k)
     {
-        // Make sure that $k$ is not 0
         if (k == 0)
         {
             throw std::invalid_argument("k must be greater than 0");
+        }
+        if (xTr.numRows() == 0 || xTr.numCols() == 0)
+        {
+            throw std::invalid_argument("xTr must be non-empty.");
+        }
+        if (yTr.numRows() != 1)
+        {
+            throw std::invalid_argument("yTr must be a row vector (1 x N).");
+        }
+        if (xTr.numRows() != yTr.numCols())
+        {
+            throw std::invalid_argument("Number of training samples and labels must be equal.");
         }
     }
 
@@ -23,7 +34,12 @@ namespace ml
         // check that it has the same number of columns as xTr
         if (x.numCols() != xTr.numCols())
         {
-            throw std::invalid_argument("Number of training samples and labels must be equal.");
+            throw std::invalid_argument("Query feature dimension must match training feature dimension.");
+        }
+
+        if (xTr.numRows() == 0)
+        {
+            throw std::logic_error("KNN has no training samples.");
         }
 
         // compute the Euclidean distance between the sample and each row in xTr
@@ -80,7 +96,7 @@ namespace ml
 
         int max_count = 0;
 
-        int predicted_label = -1;
+        int predicted_label = labels.front();
 
         for (const auto &pair : label_counts)
         {

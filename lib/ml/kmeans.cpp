@@ -99,7 +99,13 @@ namespace ml
             else
             {
                 // If there are no points in the cluster, just make the centroid a random point in the data
-                this->centroids[cluster] = this->xTr.rowsAsMatrices()[rand() % this->xTr.numRows()];
+                static thread_local std::mt19937 gen(std::random_device{}());
+                std::uniform_int_distribution<size_t> distribution(0, this->xTr.numRows() - 1);
+                const size_t random_idx = distribution(gen);
+                for (size_t j = 0; j < xTr.numCols(); ++j)
+                {
+                    new_centroids[cluster](0, j) = this->xTr(random_idx, j);
+                }
             }
 
             if (!(centroids[cluster] == new_centroids[cluster]))

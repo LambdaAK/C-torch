@@ -67,6 +67,10 @@ DQNAgent::DQNAgent(ml::Sequential q_net, ml::Sequential target_net, float start,
     : q_network(q_net), target_network(target_net), memory(memory_capacity), epsilon(start), 
       start(start), end(end), decay(decay), gamma(gamma), lr(lr), batch_size(batch_size), 
       update_frequency(update_freq), steps(0) {
+  if (update_freq <= 0)
+  {
+    throw std::invalid_argument("DQNAgent: update_frequency must be positive.");
+  }
   
   optimizer = ml::NNOptimizer(q_network.parameters(), lr, batch_size, optimizer_type);
   if (!target_network.copy_parameters_from(q_network))
@@ -164,7 +168,7 @@ void DQNAgent::update_networks(size_t batch_size)
 
   optimizer.step();
   steps++;
-  if (steps % update_frequency == 0)
+  if (update_frequency > 0 && steps % update_frequency == 0)
   {
     if (!target_network.copy_parameters_from(q_network))
     {

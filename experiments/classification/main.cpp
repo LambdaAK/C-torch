@@ -16,6 +16,7 @@
 #include <vector>
 #include <filesystem>
 #include <cstdlib>
+#include <stdexcept>
 
 #include "math/matrix.hpp"
 #include "math/ast.hpp"
@@ -106,7 +107,25 @@ std::pair<Matrix, Matrix> get_random_batch(const Matrix &x_full,
                                            const Matrix &class_labels, // shape: (1, total_samples)
                                            int batch_size)
 {
-    int total_samples = x_full.numRows();
+    if (batch_size <= 0)
+    {
+        throw std::invalid_argument("batch_size must be positive.");
+    }
+    if (class_labels.numRows() != 1)
+    {
+        throw std::invalid_argument("class_labels must be a row vector (1 x N).");
+    }
+    if (x_full.numRows() != class_labels.numCols())
+    {
+        throw std::invalid_argument("x_full rows must match class_labels columns.");
+    }
+
+    int total_samples = static_cast<int>(x_full.numRows());
+    if (batch_size > total_samples)
+    {
+        throw std::invalid_argument("batch_size cannot exceed number of samples.");
+    }
+
     std::vector<int> indices(total_samples);
     std::iota(indices.begin(), indices.end(), 0);
 

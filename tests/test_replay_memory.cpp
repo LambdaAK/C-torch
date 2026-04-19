@@ -12,3 +12,7 @@ TEST(ReplayMemory, AddAndSample) {
     ASSERT_EQ(batch.size(), 1u);
     EXPECT_EQ(batch[0].action, 0);
 }
+
+TEST(ReplayMemory, ZeroCapacityThrows) {
+    EXPECT_THROW(ReplayMemory m(0), std::invalid_argument);
+}

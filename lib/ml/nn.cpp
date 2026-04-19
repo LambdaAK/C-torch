@@ -80,6 +80,10 @@ namespace ml {
     }
 
     LinearLayer::LinearLayer(int input_dim, int output_dim) : input_dim(input_dim), output_dim(output_dim) {
+        if (input_dim <= 0 || output_dim <= 0) {
+            throw std::invalid_argument("LinearLayer dimensions must be positive.");
+        }
+
         Matrix weights_mat(output_dim, input_dim);
         Matrix bias_mat(output_dim, 1);
         
@@ -350,6 +354,10 @@ namespace ml {
         
         size_t layer_count;
         file.read(reinterpret_cast<char*>(&layer_count), sizeof(layer_count));
+        if (!file) {
+            std::cerr << "Error: Failed to read model header." << std::endl;
+            return false;
+        }
         
         size_t linear_count = 0;
         for (const auto& layer : layers) {
@@ -362,6 +370,14 @@ namespace ml {
             std::cerr << "Error: Model architecture mismatch." << std::endl;
             return false;
         }
+
+        struct PendingLayerLoad {
+            std::shared_ptr<Matrix> weights_ptr;
+            std::shared_ptr<Matrix> bias_ptr;
+            Matrix weights;
+            Matrix bias;
+        };
+        std::vector<PendingLayerLoad> pending;
         
         for (const auto& layer : layers) {
             if (auto linear = dynamic_cast<LinearLayer*>(layer.get())) {
@@ -370,26 +386,52 @@ namespace ml {
                 int input_dim, output_dim;
                 file.read(reinterpret_cast<char*>(&input_dim), sizeof(input_dim));
                 file.read(reinterpret_cast<char*>(&output_dim), sizeof(output_dim));
+                if (!file) {
+                    std::cerr << "Error: Failed to read layer dimensions." << std::endl;
+                    return false;
+                }
                 
                 if (input_dim != linear->get_input_dim() || output_dim != linear->get_output_dim()) {
                     std::cerr << "Error: Layer dimensions mismatch." << std::endl;
                     return false;
                 }
+
+                Matrix loaded_weights(weights_ptr->numRows(), weights_ptr->numCols());
+                Matrix loaded_bias(bias_ptr->numRows(), bias_ptr->numCols());
                 
-                for (size_t i = 0; i < weights_ptr->numRows(); i++) {
-                    for (size_t j = 0; j < weights_ptr->numCols(); j++) {
+                for (size_t i = 0; i < loaded_weights.numRows(); i++) {
+                    for (size_t j = 0; j < loaded_weights.numCols(); j++) {
                         double val;
                         file.read(reinterpret_cast<char*>(&val), sizeof(double));
-                        (*weights_ptr)(i, j) = val;
+                        if (!file) {
+                            std::cerr << "Error: Failed to read layer weights." << std::endl;
+                            return false;
+                        }
+                        loaded_weights(i, j) = val;
                     }
                 }
                 
-                for (size_t i = 0; i < bias_ptr->numRows(); i++) {
+                for (size_t i = 0; i < loaded_bias.numRows(); i++) {
                     double val;
                     file.read(reinterpret_cast<char*>(&val), sizeof(double));
-                    (*bias_ptr)(i, 0) = val;
+                    if (!file) {
+                        std::cerr << "Error: Failed to read layer biases." << std::endl;
+                        return false;
+                    }
+                    loaded_bias(i, 0) = val;
                 }
+
+                pending.push_back(PendingLayerLoad{
+                    weights_ptr,
+                    bias_ptr,
+                    std::move(loaded_weights),
+                    std::move(loaded_bias)});
             }
+        }
+
+        for (auto& loaded : pending) {
+            *loaded.weights_ptr = loaded.weights;
+            *loaded.bias_ptr = loaded.bias;
         }
         
         file.close();

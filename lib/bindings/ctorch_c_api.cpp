@@ -1,5 +1,6 @@
 #include "bindings/ctorch_c_api.hpp"
 
+#include <cmath>
 #include <cstring>
 #include <memory>
 #include <stdexcept>
@@ -1209,6 +1210,14 @@ CTorchRandomFourierSVM* ctorch_random_fourier_svm_create(
     double c_value)
 {
     return run_api<CTorchRandomFourierSVM*>([&]() -> CTorchRandomFourierSVM* {
+        if (d_features <= 0)
+        {
+            throw std::invalid_argument("d_features must be positive");
+        }
+        if (!std::isfinite(gamma) || gamma <= 0.0)
+        {
+            throw std::invalid_argument("gamma must be finite and positive");
+        }
         auto handle = std::make_unique<CTorchRandomFourierSVM>();
         handle->value = std::make_unique<ml::RandomFourierSVM>(
             as_matrix_ref(x_train),

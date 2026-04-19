@@ -19,3 +19,13 @@ TEST(MAB, EpsilonGreedyExplores) {
         EXPECT_LT(a, 3);
     }
 }
+
+TEST(MAB, RejectsInvalidArmCount) {
+    EXPECT_THROW(ml::MAB(0, 0.1f), std::invalid_argument);
+}
+
+TEST(MAB, UpdateRejectsOutOfRangeArm) {
+    ml::MAB mab(2, 0.0f);
+    EXPECT_THROW(mab.update(-1, 1.0), std::out_of_range);
+    EXPECT_THROW(mab.update(2, 1.0), std::out_of_range);
+}
