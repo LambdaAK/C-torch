@@ -29,6 +29,7 @@ add_executable(ctorch_tests
     test_tictactoe.cpp
     test_smoke_iris.cpp
     test_replay_memory.cpp
+    test_token.cpp
 )
 
 target_link_libraries(ctorch_tests PRIVATE ctorch GTest::gtest_main)
