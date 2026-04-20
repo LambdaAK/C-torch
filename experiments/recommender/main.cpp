@@ -5,6 +5,7 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <filesystem>
 #include <memory>
 #include <numeric>
 #include <random>
@@ -13,6 +14,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+#include <cstdlib>
 
 #include <curl/curl.h>
 
@@ -375,10 +377,67 @@ void searchSpotifyTrack(const std::string &trackName, const std::string &authTok
 
 namespace plt = matplotlibcpp;
 
-void visualize_2d_data(const Matrix &data, const std::vector<int> &assignments, int k)
+std::filesystem::path resolve_plot_path(const std::string &filename)
+{
+    const char *plot_dir_env = std::getenv("CTORCH_PLOT_DIR");
+    if (plot_dir_env != nullptr && plot_dir_env[0] != '\0')
+    {
+        std::filesystem::path dir(plot_dir_env);
+        std::error_code ec;
+        std::filesystem::create_directories(dir, ec);
+        return dir / filename;
+    }
+
+    std::filesystem::path probe = std::filesystem::current_path();
+    while (true)
+    {
+        std::filesystem::path artifacts_dir = probe / "artifacts";
+        if (std::filesystem::exists(artifacts_dir))
+        {
+            std::filesystem::path plots_dir = artifacts_dir / "plots";
+            std::error_code ec;
+            std::filesystem::create_directories(plots_dir, ec);
+            return plots_dir / filename;
+        }
+
+        const std::filesystem::path parent = probe.parent_path();
+        if (parent == probe)
+        {
+            break;
+        }
+        probe = parent;
+    }
+
+    std::filesystem::path fallback = std::filesystem::current_path() / "artifacts" / "plots";
+    std::error_code ec;
+    std::filesystem::create_directories(fallback, ec);
+    return fallback / filename;
+}
+
+void visualize_2d_data(const Matrix &data, const std::vector<int> &assignments, int k, const std::string &output_path)
 {
     try
     {
+        const std::filesystem::path output_file(output_path);
+        const std::filesystem::path artifact_root = output_file.parent_path().parent_path();
+        const std::filesystem::path mpl_cache_dir = artifact_root / ".mplconfig";
+        const std::filesystem::path xdg_cache_dir = artifact_root / ".cache";
+
+        std::error_code ec;
+        std::filesystem::create_directories(mpl_cache_dir, ec);
+        std::filesystem::create_directories(xdg_cache_dir, ec);
+
+        const std::string mpl_cache_dir_str = mpl_cache_dir.string();
+        const std::string xdg_cache_dir_str = xdg_cache_dir.string();
+#if defined(_WIN32)
+        _putenv_s("MPLCONFIGDIR", mpl_cache_dir_str.c_str());
+        _putenv_s("XDG_CACHE_HOME", xdg_cache_dir_str.c_str());
+#else
+        setenv("MPLCONFIGDIR", mpl_cache_dir_str.c_str(), 1);
+        setenv("XDG_CACHE_HOME", xdg_cache_dir_str.c_str(), 1);
+#endif
+        plt::backend("Agg");
+
         if (data.numCols() != 2)
         {
             throw std::runtime_error("Data must be n x 2 for 2D visualization");
@@ -393,36 +452,50 @@ void visualize_2d_data(const Matrix &data, const std::vector<int> &assignments, 
             "tab:blue", "tab:orange", "tab:green", "tab:red", "tab:purple",
             "tab:brown", "tab:pink", "tab:gray", "tab:olive", "tab:cyan"};
 
-        std::vector<double> full_x;
+        std::vector<double> all_x;
+        std::vector<double> all_y;
 
         for (int cluster = 0; cluster < k; cluster++)
         {
             std::vector<double> x, y;
+            double centroid_x = 0.0;
+            double centroid_y = 0.0;
 
             for (size_t i = 0; i < data.numRows(); i++)
             {
                 if (assignments[i] == cluster)
                 {
-                    full_x.push_back(data(i, 0));
+                    all_x.push_back(data(i, 0));
+                    all_y.push_back(data(i, 1));
                     x.push_back(data(i, 0));
                     y.push_back(data(i, 1));
+                    centroid_x += data(i, 0);
+                    centroid_y += data(i, 1);
                 }
             }
 
             if (x.empty())
             {
-                std::cout << "CLUSTER: " << cluster << std::endl;
+                std::cout << "Cluster " << (cluster + 1) << " has no samples." << std::endl;
                 continue;
             }
 
-            std::map<std::string, std::string> keywords;
-            keywords["label"] = "Cluster " + std::to_string(cluster);
+            centroid_x /= static_cast<double>(x.size());
+            centroid_y /= static_cast<double>(y.size());
 
             try
             {
                 std::map<std::string, std::string> kwargs;
-                kwargs["color"] = colors[cluster];
+                kwargs["color"] = colors[cluster % colors.size()];
+                kwargs["label"] = "Cluster " + std::to_string(cluster + 1);
                 plt::scatter(x, y, 3.0, kwargs);
+
+                std::map<std::string, std::string> centroid_kwargs;
+                centroid_kwargs["color"] = "black";
+                centroid_kwargs["marker"] = "X";
+                centroid_kwargs["label"] = "Centroid " + std::to_string(cluster + 1);
+                plt::scatter(std::vector<double>{centroid_x}, std::vector<double>{centroid_y}, 80.0, centroid_kwargs);
+                plt::annotate("C" + std::to_string(cluster + 1), centroid_x, centroid_y);
             }
             catch (const std::exception &e)
             {
@@ -433,29 +506,31 @@ void visualize_2d_data(const Matrix &data, const std::vector<int> &assignments, 
 
         try
         {
-            plt::title("2D Data Visualization");
+            plt::title("PCA projection of clustered tracks");
             plt::xlabel("Dimension 1");
             plt::ylabel("Dimension 2");
             plt::legend();
             plt::grid(true);
 
-            std::sort(full_x.begin(), full_x.end());
-
-            size_t n = full_x.size();
-            double lower = full_x[n * 1 / 100];
-            double upper = full_x[n * 99 / 100];
-
-            double padding = 0.05 * (upper - lower);
-            lower -= padding;
-            upper += padding;
-            plt::xlim(lower, upper);
+            if (!all_x.empty() && !all_y.empty())
+            {
+                auto [min_x_it, max_x_it] = std::minmax_element(all_x.begin(), all_x.end());
+                auto [min_y_it, max_y_it] = std::minmax_element(all_y.begin(), all_y.end());
+                double x_pad = std::max(0.05 * (*max_x_it - *min_x_it), 1e-6);
+                double y_pad = std::max(0.05 * (*max_y_it - *min_y_it), 1e-6);
+                plt::xlim(*min_x_it - x_pad, *max_x_it + x_pad);
+                plt::ylim(*min_y_it - y_pad, *max_y_it + y_pad);
+            }
         }
         catch (const std::exception &e)
         {
             std::cerr << "Warning: Could not set labels: " << e.what() << std::endl;
         }
 
-        plt::show();
+        plt::tight_layout();
+        plt::save(output_path);
+        plt::close();
+        std::cout << "Saved PCA cluster plot to " << output_path << std::endl;
     }
     catch (const std::exception &e)
     {
@@ -713,7 +788,7 @@ int main()
         Matrix W = visualize.compute_projection_mat(2);
 
         Matrix xTr_2D = xTr_PCA * W;
-        visualize_2d_data(xTr_2D, assignments, k);
+        visualize_2d_data(xTr_2D, assignments, k, resolve_plot_path("recommender_pca_clusters.png").string());
     }
 
     ml::UCB ucb_bandit(k);

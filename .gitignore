@@ -39,6 +39,9 @@ experiments/**/runs/
 experiments/**/run_outputs/
 experiments/**/checkpoints/
 artifacts/runs/
+artifacts/plots/
+artifacts/.cache/
+artifacts/.mplconfig/
 
 # Generated metrics/result files
 experiments/**/*_results.csv

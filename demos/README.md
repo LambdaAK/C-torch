@@ -43,3 +43,9 @@ python3 demos/logistic_regression/main.py
 ```
 
 If the shared library has not been built yet, run `make py-bindings` first.
+
+Each Python demo saves a PNG into `artifacts/plots/`:
+
+- `kernel_svm_boundary.png`
+- `linear_regression_fit.png`
+- `logistic_regression_boundary.png`

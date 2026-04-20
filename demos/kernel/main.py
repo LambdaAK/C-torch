@@ -22,6 +22,8 @@ from typing import Iterator
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 PYTHON_DIR = REPO_ROOT / "python"
 if str(PYTHON_DIR) not in sys.path:
     sys.path.insert(0, str(PYTHON_DIR))
@@ -43,6 +45,7 @@ if "CTORCH_LIB_PATH" not in os.environ:
 
 
 from ctorch import KernelSVM, KernelType, Matrix  # noqa: E402
+from demos.visualization import plot_binary_decision_boundary  # noqa: E402
 
 
 @dataclass(frozen=True)
@@ -134,6 +137,15 @@ def main() -> None:
 
     train_accuracy = model.score(x_train, y_train)
     test_accuracy = model.score(x_test, y_test)
+    plot_path = plot_binary_decision_boundary(
+        model,
+        x_train,
+        y_train,
+        x_test,
+        y_test,
+        title="Kernel SVM Decision Boundary",
+        filename="kernel_svm_boundary.png",
+    )
 
     print("Kernel SVM")
     print("Concentric circles demo (Python bindings)")
@@ -144,6 +156,7 @@ def main() -> None:
     print(f"Kernel: radial basis (gamma={gamma:.3f})")
     print(f"Train accuracy: {train_accuracy:.3f}")
     print(f"Test accuracy: {test_accuracy:.3f}")
+    print(f"Saved plot: {plot_path}")
     print()
     print("Test predictions:")
     for sample in test_samples:

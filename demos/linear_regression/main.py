@@ -21,6 +21,8 @@ from typing import Iterator
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 PYTHON_DIR = REPO_ROOT / "python"
 if str(PYTHON_DIR) not in sys.path:
     sys.path.insert(0, str(PYTHON_DIR))
@@ -42,6 +44,7 @@ if "CTORCH_LIB_PATH" not in os.environ:
 
 
 from ctorch import LinearRegression, Matrix  # noqa: E402
+from demos.visualization import plot_regression_fit  # noqa: E402
 
 
 @dataclass(frozen=True)
@@ -124,6 +127,15 @@ def main() -> None:
 
     train_mae = mean_absolute_error(model, train_samples)
     test_mae = mean_absolute_error(model, test_samples)
+    plot_path = plot_regression_fit(
+        model,
+        x_train,
+        y_train,
+        samples_to_features(test_samples),
+        samples_to_targets(test_samples),
+        title=f"Linear Regression Fit (train MAE {train_mae:.3f}, test MAE {test_mae:.3f})",
+        filename="linear_regression_fit.png",
+    )
 
     print("Linear Regression demo")
     print(f"Target function: y = {slope:.3f}x + {intercept:.3f} + noise")
@@ -131,6 +143,7 @@ def main() -> None:
     print(f"Test samples: {len(test_samples)}")
     print(f"Train MAE: {train_mae:.3f}")
     print(f"Test MAE: {test_mae:.3f}")
+    print(f"Saved plot: {plot_path}")
     print()
     print("Test predictions:")
     for sample in test_samples:
