@@ -368,7 +368,6 @@ Prefer writing new checkpoints under a local **`artifacts/`** directory (tracked
 ## Known limitations
 
 - Some planned features in comments/proposal are partial or not productionized.
-- `lib/math/token.hpp` lexer/parser scaffolding is incomplete.
 - Several scripts/flows assume local environment details (Python version, headers, OS commands).
 - Automated tests cover selected `lib` and DQN behaviors (`ctest` / `ctorch_tests`); coverage is not exhaustive.
 - Documentation quality is uneven across source files.
@@ -389,7 +388,4 @@ Examples aligned with the original proposal: richer automatic differentiation, a
 
 ## Project proposal
 
-The original project proposal is in:
-
-- [`proposal/Project Proposal.md`](proposal/Project%20Proposal.md)
-- [`proposal/Project Proposal.pdf`](proposal/Project%20Proposal.pdf)
+The original project proposal is not included in this checkout.

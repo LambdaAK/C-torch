@@ -4,6 +4,9 @@
 - Reviewed core math/ML libraries, RL experiment code, C API bindings, and representative experiment utilities.
 - Ran existing tests, targeted Python repro scripts, and targeted C++ repro programs (including ASAN for memory safety cases).
 
+## Status Note
+- This document is a historical snapshot from 2026-04-19. Several of the findings have already been fixed in the current branch, so revalidate any item against `main` before treating it as active.
+
 ## Exhaustive Bug List
 
 | ID | Severity | Location | Bug | Evidence / Repro |
