@@ -1,6 +1,7 @@
 #include "randomfouriersvm.hpp"
 #include "math/matrix.hpp"
 #include "math/dataaugmentor.hpp"
+#include "math/parallel.hpp"
 #include <random>
 #include <cmath>
 #include <stdexcept>
@@ -70,18 +71,21 @@ namespace ml
         }
 
         Matrix result(x.numRows(), D);
-        for (size_t i = 0; i < x.numRows(); ++i)
+        ctorch::parallel::parallel_for_items(x.numRows(), x.numCols() * static_cast<size_t>(D), [&](size_t begin, size_t end)
         {
-            for (int j = 0; j < D; ++j)
+            for (size_t i = begin; i < end; ++i)
             {
-                double dot_product = 0.0;
-                for (size_t k = 0; k < x.numCols(); ++k)
+                for (int j = 0; j < D; ++j)
                 {
-                    dot_product += x(i, k) * W(j, k);
+                    double dot_product = 0.0;
+                    for (size_t k = 0; k < x.numCols(); ++k)
+                    {
+                        dot_product += x(i, k) * W(j, k);
+                    }
+                    result(i, j) = std::cos(dot_product + b(j, 0));
                 }
-                result(i, j) = std::cos(dot_product + b(j, 0));
             }
-        }
+        });
         return result;
     }
 
@@ -106,26 +110,36 @@ namespace ml
             throw std::invalid_argument("RandomFourierSVM::score: xTe must contain at least one sample.");
         }
 
-        int correct = 0;
         const size_t total = xTe.numRows();
-
-        for (size_t i = 0; i < total; i++)
-        {
-            Matrix x_row(1, xTe.numCols());
-            for (size_t j = 0; j < xTe.numCols(); j++)
+        const int correct = ctorch::parallel::parallel_reduce_items<int>(
+            total,
+            xTe.numCols(),
+            0,
+            [&](size_t begin, size_t end)
             {
-                x_row(0, j) = xTe(i, j);
-            }
+                int local_correct = 0;
+                for (size_t i = begin; i < end; ++i)
+                {
+                    Matrix x_row(1, xTe.numCols());
+                    for (size_t j = 0; j < xTe.numCols(); ++j)
+                    {
+                        x_row(0, j) = xTe(i, j);
+                    }
 
-            int prediction = predict(x_row);
+                    const int prediction = predict(x_row);
+                    const int true_label = static_cast<int>(yTe.at(0, i));
 
-            int true_label = static_cast<int>(yTe.at(0, i));
-
-            if (prediction == true_label)
+                    if (prediction == true_label)
+                    {
+                        ++local_correct;
+                    }
+                }
+                return local_correct;
+            },
+            [](int lhs, int rhs)
             {
-                correct++;
-            }
-        }
+                return lhs + rhs;
+            });
 
         return static_cast<double>(correct) / static_cast<double>(total);
     }

@@ -1,4 +1,5 @@
 #include "matrix.hpp"
+#include "parallel.hpp"
 #include <algorithm>
 #include <cmath>
 #include <stdexcept>
@@ -107,10 +108,18 @@ Matrix Matrix::transpose() const
 {
     Matrix result(cols, rows); // make a matrix with the swapped dimensions
 
-    // Map (i, j) -> (j, i)
-    for (size_t i = 0; i < rows; ++i)
-        for (size_t j = 0; j < cols; ++j)
-            result(j, i) = (*this)(i, j);
+    // Map (i, j) -> (j, i) in parallel across source rows.
+    ctorch::parallel::parallel_for_items(rows, cols, [&](size_t begin, size_t end)
+    {
+        for (size_t i = begin; i < end; ++i)
+        {
+            const size_t src_row_offset = i * cols;
+            for (size_t j = 0; j < cols; ++j)
+            {
+                result.data[j * rows + i] = data[src_row_offset + j];
+            }
+        }
+    });
     return result;
 }
 
@@ -119,18 +128,36 @@ Matrix Matrix::operator+(const Matrix &other) const
     if (rows != other.rows || cols != other.cols)
         throw std::invalid_argument("Matrix dimensions must match for addition");
     Matrix result(rows, cols);
-    for (size_t i = 0; i < rows * cols; ++i)
-        result.data[i] = data[i] + other.data[i];
+    ctorch::parallel::parallel_for_items(rows, cols, [&](size_t begin, size_t end)
+    {
+        for (size_t i = begin; i < end; ++i)
+        {
+            const size_t offset = i * cols;
+            for (size_t j = 0; j < cols; ++j)
+            {
+                result.data[offset + j] = data[offset + j] + other.data[offset + j];
+            }
+        }
+    });
     return result;
 }
 
 Matrix Matrix::operator-(const Matrix &other) const
 {
     if (rows != other.rows || cols != other.cols)
-        throw std::invalid_argument("Matrix dimensions must match for addition");
+        throw std::invalid_argument("Matrix dimensions must match for subtraction");
     Matrix result(rows, cols);
-    for (size_t i = 0; i < rows * cols; ++i)
-        result.data[i] = data[i] - other.data[i];
+    ctorch::parallel::parallel_for_items(rows, cols, [&](size_t begin, size_t end)
+    {
+        for (size_t i = begin; i < end; ++i)
+        {
+            const size_t offset = i * cols;
+            for (size_t j = 0; j < cols; ++j)
+            {
+                result.data[offset + j] = data[offset + j] - other.data[offset + j];
+            }
+        }
+    });
     return result;
 }
 
@@ -138,20 +165,24 @@ Matrix Matrix::operator-(const Matrix &other) const
 Matrix Matrix::operator*(double scalar) const
 {
     Matrix result(rows, cols);
-    for (size_t i = 0; i < rows * cols; ++i)
-        result.data[i] = data[i] * scalar;
+    ctorch::parallel::parallel_for_items(rows, cols, [&](size_t begin, size_t end)
+    {
+        for (size_t i = begin; i < end; ++i)
+        {
+            const size_t offset = i * cols;
+            for (size_t j = 0; j < cols; ++j)
+            {
+                result.data[offset + j] = data[offset + j] * scalar;
+            }
+        }
+    });
     return result;
 }
 
 // opposite-direction scalar multiplication
 Matrix operator*(double scalar, const Matrix &m)
 {
-    Matrix result(m.numRows(), m.numCols());
-
-    for (size_t i = 0; i < m.numRows(); ++i)
-        for (size_t j = 0; j < m.numCols(); ++j)
-            result(i, j) = scalar * m(i, j);
-    return result;
+    return m * scalar;
 }
 
 // matrix multiplication
@@ -163,10 +194,28 @@ Matrix Matrix::operator*(const Matrix &m) const
             std::to_string(m.rows) + "x" + std::to_string(m.cols) + ")");
 
     Matrix result(rows, m.cols);
-    for (size_t i = 0; i < rows; ++i)
-        for (size_t j = 0; j < m.cols; ++j)
-            for (size_t k = 0; k < cols; ++k)
-                result(i, j) += (*this)(i, k) * m(k, j);
+    if (cols == 0 || m.cols == 0)
+    {
+        return result;
+    }
+
+    ctorch::parallel::parallel_for_items(rows, cols * m.cols, [&](size_t begin, size_t end)
+    {
+        for (size_t i = begin; i < end; ++i)
+        {
+            const size_t lhs_row_offset = i * cols;
+            const size_t result_row_offset = i * m.cols;
+            for (size_t j = 0; j < m.cols; ++j)
+            {
+                double sum = 0.0;
+                for (size_t k = 0; k < cols; ++k)
+                {
+                    sum += data[lhs_row_offset + k] * m.data[k * m.cols + j];
+                }
+                result.data[result_row_offset + j] = sum;
+            }
+        }
+    });
     return result;
 }
 
@@ -197,30 +246,52 @@ double Matrix::euclideanDistance(const Matrix &other) const
     if (this_length != other_length)
         throw std::invalid_argument("Vectors must have the same length for Euclidean distance");
 
-    // Euclidean distance formula: sqrt(sum((a_i - b_i)^2))
-    double sum_squared_diff = 0.0;
-    for (size_t i = 0; i < this_length; ++i)
+    if (this_length == 0)
     {
-        double diff = data[i] - other.data[i];
-        sum_squared_diff += diff * diff;
+        return 0.0;
     }
+
+    // Euclidean distance formula: sqrt(sum((a_i - b_i)^2))
+    const double sum_squared_diff = ctorch::parallel::parallel_reduce_items<double>(
+        this_length,
+        1,
+        0.0,
+        [&](size_t begin, size_t end)
+        {
+            double local_sum = 0.0;
+            for (size_t i = begin; i < end; ++i)
+            {
+                const double diff = data[i] - other.data[i];
+                local_sum += diff * diff;
+            }
+            return local_sum;
+        },
+        [](double lhs, double rhs)
+        {
+            return lhs + rhs;
+        });
+
     return std::sqrt(sum_squared_diff);
 }
 
 // Return the rows of a matrix as matrix objects. Expensive, so call sparingly
 std::vector<Matrix> Matrix::rowsAsMatrices() const
 {
-    std::vector<Matrix> matrices;
+    std::vector<Matrix> matrices(rows);
 
-    for (size_t i = 0; i < rows; ++i)
+    ctorch::parallel::parallel_for_items(rows, cols, [&](size_t begin, size_t end)
     {
-        Matrix row(1, cols); // one row, same number of columns
-        for (size_t j = 0; j < cols; ++j)
+        for (size_t i = begin; i < end; ++i)
         {
-            row(0, j) = (*this)(i, j);
+            Matrix row(1, cols);
+            const size_t offset = i * cols;
+            for (size_t j = 0; j < cols; ++j)
+            {
+                row(0, j) = data[offset + j];
+            }
+            matrices[i] = row;
         }
-        matrices.push_back(row);
-    }
+    });
     return matrices;
 }
 
@@ -233,98 +304,133 @@ double Matrix::inner_product(const Matrix &other) const
     */
     if (rows != other.rows || cols != other.cols || !(rows == 1 || cols == 1))
         throw std::invalid_argument("Dimension mismatch.");
-    double result = 0.0;
-    // element-wise product
-    for (size_t i = 0; i < rows * cols; ++i)
-        result += data[i] * other.data[i];
 
-    return result;
+    const size_t length = rows * cols;
+    if (length == 0)
+    {
+        return 0.0;
+    }
+
+    return ctorch::parallel::parallel_reduce_items<double>(
+        length,
+        1,
+        0.0,
+        [&](size_t begin, size_t end)
+        {
+            double local_sum = 0.0;
+            for (size_t i = begin; i < end; ++i)
+            {
+                local_sum += data[i] * other.data[i];
+            }
+            return local_sum;
+        },
+        [](double lhs, double rhs)
+        {
+            return lhs + rhs;
+        });
 }
 
 Matrix Matrix::relu() const
 {
     Matrix result(rows, cols);
-    for (size_t i = 0; i < rows; i++)
+    ctorch::parallel::parallel_for_items(rows, cols, [&](size_t begin, size_t end)
     {
-        for (size_t j = 0; j < cols; j++)
+        for (size_t i = begin; i < end; ++i)
         {
-            result(i, j) = std::max(0.0, data[i * cols + j]);
+            const size_t offset = i * cols;
+            for (size_t j = 0; j < cols; ++j)
+            {
+                result.data[offset + j] = std::max(0.0, data[offset + j]);
+            }
         }
-    }
+    });
     return result;
 }
 
 Matrix Matrix::relu_deriv() const
 {
     Matrix result(rows, cols);
-    for (size_t i = 0; i < rows; i++)
+    ctorch::parallel::parallel_for_items(rows, cols, [&](size_t begin, size_t end)
     {
-        for (size_t j = 0; j < cols; j++)
+        for (size_t i = begin; i < end; ++i)
         {
-            if (data[i * cols + j] <= 0)
+            const size_t offset = i * cols;
+            for (size_t j = 0; j < cols; ++j)
             {
-                result(i, j) = 0;
-            }
-            else
-            {
-                result(i, j) = 1.0;
+                result.data[offset + j] = (data[offset + j] <= 0.0) ? 0.0 : 1.0;
             }
         }
-    }
+    });
     return result;
 }
 
 Matrix Matrix::sigmoid() const
 {
     Matrix result(rows, cols);
-    for (size_t i = 0; i < rows; i++)
+    ctorch::parallel::parallel_for_items(rows, cols, [&](size_t begin, size_t end)
     {
-        for (size_t j = 0; j < cols; j++)
+        for (size_t i = begin; i < end; ++i)
         {
-            result(i, j) = 1.0 / (1.0 + std::exp(-data[i * cols + j]));
+            const size_t offset = i * cols;
+            for (size_t j = 0; j < cols; ++j)
+            {
+                result.data[offset + j] = 1.0 / (1.0 + std::exp(-data[offset + j]));
+            }
         }
-    }
+    });
     return result;
 }
 
 Matrix Matrix::sigmoid_deriv() const
 {
     Matrix result(rows, cols);
-    for (size_t i = 0; i < rows; i++)
+    ctorch::parallel::parallel_for_items(rows, cols, [&](size_t begin, size_t end)
     {
-        for (size_t j = 0; j < cols; j++)
+        for (size_t i = begin; i < end; ++i)
         {
-            double sigmoid = 1.0 / (1.0 + std::exp(-data[i * cols + j]));
-            result(i, j) = sigmoid * (1 - sigmoid);
+            const size_t offset = i * cols;
+            for (size_t j = 0; j < cols; ++j)
+            {
+                const double sigmoid = 1.0 / (1.0 + std::exp(-data[offset + j]));
+                result.data[offset + j] = sigmoid * (1.0 - sigmoid);
+            }
         }
-    }
+    });
     return result;
 }
 
 Matrix Matrix::tanh() const
 {
     Matrix result(rows, cols);
-    for (size_t i = 0; i < rows; i++)
+    ctorch::parallel::parallel_for_items(rows, cols, [&](size_t begin, size_t end)
     {
-        for (size_t j = 0; j < cols; j++)
+        for (size_t i = begin; i < end; ++i)
         {
-            result(i, j) = std::tanh(data[i * cols + j]);
+            const size_t offset = i * cols;
+            for (size_t j = 0; j < cols; ++j)
+            {
+                result.data[offset + j] = std::tanh(data[offset + j]);
+            }
         }
-    }
+    });
     return result;
 }
 
 Matrix Matrix::tanh_deriv() const
 {
     Matrix result(rows, cols);
-    for (size_t i = 0; i < rows; i++)
+    ctorch::parallel::parallel_for_items(rows, cols, [&](size_t begin, size_t end)
     {
-        for (size_t j = 0; j < cols; j++)
+        for (size_t i = begin; i < end; ++i)
         {
-            double tanh = std::tanh(data[i * cols + j]);
-            result(i, j) = 1 - tanh * tanh;
+            const size_t offset = i * cols;
+            for (size_t j = 0; j < cols; ++j)
+            {
+                const double tanh_value = std::tanh(data[offset + j]);
+                result.data[offset + j] = 1.0 - tanh_value * tanh_value;
+            }
         }
-    }
+    });
     return result;
 }
 
@@ -337,13 +443,17 @@ Matrix Matrix::elm_wise_product(const Matrix &other) const
     }
 
     Matrix result(rows, cols);
-    for (size_t i = 0; i < rows; i++)
+    ctorch::parallel::parallel_for_items(rows, cols, [&](size_t begin, size_t end)
     {
-        for (size_t j = 0; j < cols; j++)
+        for (size_t i = begin; i < end; ++i)
         {
-            result(i, j) = data[i * cols + j] * other.data[i * cols + j];
+            const size_t offset = i * cols;
+            for (size_t j = 0; j < cols; ++j)
+            {
+                result.data[offset + j] = data[offset + j] * other.data[offset + j];
+            }
         }
-    }
+    });
     return result;
 }
 

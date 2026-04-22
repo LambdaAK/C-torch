@@ -80,6 +80,7 @@ make py-wheel
   - Vector distance and inner product
   - Activation helpers (`relu`, `sigmoid`, `tanh`) and derivatives
   - Column utilities (`l2_norm_cols`, `center_cols`)
+  - Large row-wise kernels are multi-threaded when the workload is big enough
 - `ast.hpp`
   - Symbolic expression tree (`Num`, `Var`, arithmetic ops, `exp`, `log`, `sqrt`, `abs`, `max`, `min`, `sigmoid` helper)
   - Simplification and substitution

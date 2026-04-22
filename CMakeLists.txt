@@ -5,6 +5,8 @@ endif()
 
 project(ctorch CXX)
 
+find_package(Threads REQUIRED)
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -33,6 +35,7 @@ set_target_properties(ctorch PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_include_directories(ctorch PUBLIC
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/lib>
 )
+target_link_libraries(ctorch PUBLIC Threads::Threads)
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
     target_compile_options(ctorch PRIVATE -Wall -Wextra)
 endif()

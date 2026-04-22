@@ -1,4 +1,5 @@
 #include "dataaugmentor.hpp"
+#include "parallel.hpp"
 #include <random>
 #include <cmath>
 #include <limits>
@@ -15,72 +16,67 @@ Matrix DataAugmentor::no_op(const Matrix &x) {
 
 Matrix DataAugmentor::poly_2(const Matrix &x) {
     Matrix result(x.numRows(), x.numCols() * 2);
-    for (size_t i = 0; i < x.numRows(); ++i) {
-        for (size_t j = 0; j < x.numCols(); ++j) {
-            result(i, j) = x(i, j);
-            result(i, j + x.numCols()) = x(i, j) * x(i, j);
+    ctorch::parallel::parallel_for_items(x.numRows(), x.numCols(), [&](size_t begin, size_t end) {
+        for (size_t i = begin; i < end; ++i) {
+            for (size_t j = 0; j < x.numCols(); ++j) {
+                const double value = x(i, j);
+                result(i, j) = value;
+                result(i, j + x.numCols()) = value * value;
+            }
         }
-    }
+    });
     return result;
 }
 
 Matrix DataAugmentor::poly_3(const Matrix &x) {
     Matrix result(x.numRows(), x.numCols() * 3);
-    for (size_t i = 0; i < x.numRows(); ++i) {
-        for (size_t j = 0; j < x.numCols(); ++j) {
-            // Original feature
-            result(i, j) = x(i, j);
-            
-            // Squared feature (x²)
-            result(i, j + x.numCols()) = x(i, j) * x(i, j);
-            
-            // Cubed feature (x³)
-            result(i, j + 2 * x.numCols()) = x(i, j) * x(i, j) * x(i, j);
+    ctorch::parallel::parallel_for_items(x.numRows(), x.numCols(), [&](size_t begin, size_t end) {
+        for (size_t i = begin; i < end; ++i) {
+            for (size_t j = 0; j < x.numCols(); ++j) {
+                const double value = x(i, j);
+                result(i, j) = value;
+                result(i, j + x.numCols()) = value * value;
+                result(i, j + 2 * x.numCols()) = value * value * value;
+            }
         }
-    }
+    });
     return result;
 }
 
 Matrix DataAugmentor::poly_4(const Matrix &x) {
     Matrix result(x.numRows(), x.numCols() * 4);
-    for (size_t i = 0; i < x.numRows(); ++i) {
-        for (size_t j = 0; j < x.numCols(); ++j) {
-            // Original feature (x)
-            result(i, j) = x(i, j);
-            
-            // Squared feature (x²)
-            result(i, j + x.numCols()) = x(i, j) * x(i, j);
-            
-            // Cubed feature (x³)
-            result(i, j + 2 * x.numCols()) = x(i, j) * x(i, j) * x(i, j);
-            
-            // Fourth power feature (x⁴)
-            result(i, j + 3 * x.numCols()) = x(i, j) * x(i, j) * x(i, j) * x(i, j);
+    ctorch::parallel::parallel_for_items(x.numRows(), x.numCols(), [&](size_t begin, size_t end) {
+        for (size_t i = begin; i < end; ++i) {
+            for (size_t j = 0; j < x.numCols(); ++j) {
+                const double value = x(i, j);
+                const double squared = value * value;
+                result(i, j) = value;
+                result(i, j + x.numCols()) = squared;
+                result(i, j + 2 * x.numCols()) = squared * value;
+                result(i, j + 3 * x.numCols()) = squared * squared;
+            }
         }
-    }
+    });
     return result;
 }
 
 Matrix DataAugmentor::poly_5(const Matrix &x) {
     Matrix result(x.numRows(), x.numCols() * 5);
-    for (size_t i = 0; i < x.numRows(); ++i) {
-        for (size_t j = 0; j < x.numCols(); ++j) {
-            // Original feature (x)
-            result(i, j) = x(i, j);
-            
-            // Squared feature (x²)
-            result(i, j + x.numCols()) = x(i, j) * x(i, j);
-            
-            // Cubed feature (x³)
-            result(i, j + 2 * x.numCols()) = x(i, j) * x(i, j) * x(i, j);
-            
-            // Fourth power feature (x⁴)
-            result(i, j + 3 * x.numCols()) = x(i, j) * x(i, j) * x(i, j) * x(i, j);
-            
-            // Fifth power feature (x⁵)
-            result(i, j + 4 * x.numCols()) = x(i, j) * x(i, j) * x(i, j) * x(i, j) * x(i, j);
+    ctorch::parallel::parallel_for_items(x.numRows(), x.numCols(), [&](size_t begin, size_t end) {
+        for (size_t i = begin; i < end; ++i) {
+            for (size_t j = 0; j < x.numCols(); ++j) {
+                const double value = x(i, j);
+                const double squared = value * value;
+                const double cubed = squared * value;
+                const double fourth = squared * squared;
+                result(i, j) = value;
+                result(i, j + x.numCols()) = squared;
+                result(i, j + 2 * x.numCols()) = cubed;
+                result(i, j + 3 * x.numCols()) = fourth;
+                result(i, j + 4 * x.numCols()) = fourth * value;
+            }
         }
-    }
+    });
     return result;
 }
 
@@ -120,15 +116,17 @@ Matrix DataAugmentor::random_fourier_features(const Matrix &x, int D, double gam
     // Compute RFFs
     double scale = std::sqrt(2.0 / static_cast<double>(feature_count));
 
-    for (size_t i = 0; i < n; ++i) {
-        for (size_t j = 0; j < feature_count; ++j) {
-            double dot_product = 0.0;
-            for (size_t k = 0; k < d; ++k) {
-                dot_product += x(i, k) * W(k, j);
+    ctorch::parallel::parallel_for_items(n, d * feature_count, [&](size_t begin, size_t end) {
+        for (size_t i = begin; i < end; ++i) {
+            for (size_t j = 0; j < feature_count; ++j) {
+                double dot_product = 0.0;
+                for (size_t k = 0; k < d; ++k) {
+                    dot_product += x(i, k) * W(k, j);
+                }
+                result(i, j) = scale * std::cos(dot_product + b(0, j));
             }
-            result(i, j) = scale * std::cos(dot_product + b(0, j));
         }
-    }
+    });
 
     return result;
 }

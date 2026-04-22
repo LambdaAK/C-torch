@@ -2,7 +2,7 @@
 #   cmake -B build && cmake --build build --target classification
 
 CXX = g++
-CXXFLAGS = -std=c++17 -O3 -Wall -Wextra -I../../lib -I../recommender
+CXXFLAGS = -std=c++17 -O3 -Wall -Wextra -pthread -I../../lib -I../recommender
 
 SRC_DIR = .
 MATH_DIR = ../../lib/math

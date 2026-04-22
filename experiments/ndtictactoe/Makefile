@@ -2,7 +2,7 @@
 #   cmake -B build && cmake --build build --target tictactoe ttt_main
 
 CXX = g++
-CXXFLAGS = -Wall -std=c++17 -I../../lib -march=native -funroll-loops
+CXXFLAGS = -Wall -std=c++17 -pthread -I../../lib -march=native -funroll-loops
 
 MAIN_SRC = ./main.cpp
 MATH_SRC = ../../lib/math/matrix.cpp
