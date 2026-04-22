@@ -290,6 +290,15 @@ namespace ml {
       bool copy_parameters_from(const Sequential& other);
 
       /**
+       * @brief Creates a worker-local copy that shares parameters but owns fresh gradient buffers.
+       *
+       * The returned model is intended for parallel training workers that need to
+       * read a shared parameter snapshot while accumulating gradients independently.
+       * @return Copy of the model with empty cached activations and private gradient storage.
+       */
+      Sequential copy_for_parallel_training() const;
+
+      /**
        * @brief Serializes model parameters to disk.
        * @param filepath Destination file path.
        * @return `true` when save succeeds.

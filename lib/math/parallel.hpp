@@ -8,6 +8,30 @@
 
 namespace ctorch::parallel
 {
+namespace detail
+{
+inline thread_local std::size_t parallel_depth = 0;
+
+class ParallelRegionGuard
+{
+public:
+    ParallelRegionGuard()
+    {
+        ++parallel_depth;
+    }
+
+    ~ParallelRegionGuard()
+    {
+        --parallel_depth;
+    }
+};
+
+inline bool in_parallel_region()
+{
+    return parallel_depth > 0;
+}
+} // namespace detail
+
 inline std::size_t hardware_threads()
 {
     const unsigned int count = std::thread::hardware_concurrency();
@@ -28,12 +52,13 @@ inline void parallel_for_items(
 
     const std::size_t total_work = item_count * work_units_per_item;
     const std::size_t max_threads = hardware_threads();
-    if (item_count < 2 || total_work < min_total_work || max_threads < 2)
+    if (item_count < 2 || total_work < min_total_work || max_threads < 2 || detail::in_parallel_region())
     {
         fn(0, item_count);
         return;
     }
 
+    detail::ParallelRegionGuard region_guard;
     const std::size_t workers = std::min(max_threads, item_count);
     std::vector<std::thread> threads;
     threads.reserve(workers - 1);
@@ -46,7 +71,10 @@ inline void parallel_for_items(
     {
         const std::size_t span = base + (i < remainder ? 1 : 0);
         const std::size_t end = begin + span;
-        threads.emplace_back([begin, end, &fn]() { fn(begin, end); });
+        threads.emplace_back([begin, end, &fn]() {
+            detail::ParallelRegionGuard thread_guard;
+            fn(begin, end);
+        });
         begin = end;
     }
 
@@ -74,11 +102,12 @@ inline T parallel_reduce_items(
 
     const std::size_t total_work = item_count * work_units_per_item;
     const std::size_t max_threads = hardware_threads();
-    if (item_count < 2 || total_work < min_total_work || max_threads < 2)
+    if (item_count < 2 || total_work < min_total_work || max_threads < 2 || detail::in_parallel_region())
     {
         return fn(0, item_count);
     }
 
+    detail::ParallelRegionGuard region_guard;
     const std::size_t workers = std::min(max_threads, item_count);
     std::vector<T> partials(workers, identity);
     std::vector<std::thread> threads;
@@ -92,7 +121,10 @@ inline T parallel_reduce_items(
     {
         const std::size_t span = base + (i < remainder ? 1 : 0);
         const std::size_t end = begin + span;
-        threads.emplace_back([begin, end, &fn, &partials, i]() { partials[i] = fn(begin, end); });
+        threads.emplace_back([begin, end, &fn, &partials, i]() {
+            detail::ParallelRegionGuard thread_guard;
+            partials[i] = fn(begin, end);
+        });
         begin = end;
     }
 

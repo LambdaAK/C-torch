@@ -2,14 +2,18 @@
 
 #include "ast.hpp"
 #include "lossfunction.hpp"
+#include "parallel.hpp"
 
 #include <algorithm>
+#include <exception>
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
+#include <mutex>
 #include <set>
 #include <stdexcept>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 namespace math
@@ -232,14 +236,44 @@ namespace math
         {
             validate_supervised_data(xTr, yTr);
 
-            std::shared_ptr<ASTNode> loss = Num(0);
             std::vector<Matrix> xTr_rows = xTr.rowsAsMatrices();
+            std::vector<std::shared_ptr<ASTNode>> sample_losses(xTr.numRows());
+            std::exception_ptr error;
+            std::mutex error_mutex;
 
-            for (size_t i = 0; i < xTr.numRows(); i++)
+            ctorch::parallel::parallel_for_items(
+                xTr.numRows(),
+                1,
+                [&](std::size_t begin, std::size_t end)
+                {
+                    try
+                    {
+                        for (std::size_t i = begin; i < end; ++i)
+                        {
+                            Matrix x = xTr_rows[i];
+                            int y = static_cast<int>(yTr.at(0, i));
+                            sample_losses[i] = loss_function->sample_loss(x, y);
+                        }
+                    }
+                    catch (...)
+                    {
+                        std::lock_guard<std::mutex> lock(error_mutex);
+                        if (!error)
+                        {
+                            error = std::current_exception();
+                        }
+                    }
+                },
+                2);
+
+            if (error)
             {
-                Matrix x = xTr_rows[i];
-                int y = static_cast<int>(yTr.at(0, i));
-                std::shared_ptr<ASTNode> sample_loss = loss_function->sample_loss(x, y);
+                std::rethrow_exception(error);
+            }
+
+            std::shared_ptr<ASTNode> loss = Num(0);
+            for (const auto &sample_loss : sample_losses)
+            {
                 loss = loss + sample_loss;
             }
 
@@ -265,16 +299,53 @@ namespace math
             validate_supervised_data(xTr, yTr);
             const int normalized_batch_size = normalize_batch_size(batch_size);
 
-            std::shared_ptr<ASTNode> loss = Num(0);
             std::vector<Matrix> xTr_rows = xTr.rowsAsMatrices();
             const int num_rows = static_cast<int>(xTr.numRows());
+            std::vector<int> sampled_indices(normalized_batch_size);
 
             for (int j = 0; j < normalized_batch_size; j++)
             {
-                int index = std::rand() % num_rows;
-                Matrix x = xTr_rows[index];
-                int y = static_cast<int>(yTr.at(0, index));
-                std::shared_ptr<ASTNode> sample_loss = loss_function->sample_loss(x, y);
+                sampled_indices[j] = std::rand() % num_rows;
+            }
+
+            std::vector<std::shared_ptr<ASTNode>> sample_losses(normalized_batch_size);
+            std::exception_ptr error;
+            std::mutex error_mutex;
+
+            ctorch::parallel::parallel_for_items(
+                static_cast<std::size_t>(normalized_batch_size),
+                1,
+                [&](std::size_t begin, std::size_t end)
+                {
+                    try
+                    {
+                        for (std::size_t j = begin; j < end; ++j)
+                        {
+                            const int index = sampled_indices[j];
+                            Matrix x = xTr_rows[index];
+                            int y = static_cast<int>(yTr.at(0, index));
+                            sample_losses[j] = loss_function->sample_loss(x, y);
+                        }
+                    }
+                    catch (...)
+                    {
+                        std::lock_guard<std::mutex> lock(error_mutex);
+                        if (!error)
+                        {
+                            error = std::current_exception();
+                        }
+                    }
+                },
+                2);
+
+            if (error)
+            {
+                std::rethrow_exception(error);
+            }
+
+            std::shared_ptr<ASTNode> loss = Num(0);
+            for (const auto &sample_loss : sample_losses)
+            {
                 loss = loss + sample_loss;
             }
 
@@ -343,46 +414,84 @@ namespace math
 
             std::unordered_map<std::string, double> derivatives;
 
+            std::vector<std::pair<std::string, double>> variables;
+            variables.reserve(values.size());
             for (const auto &pair : values)
             {
-                std::string var_name = pair.first;
-                // compute the partial derivative
-                // compute f(x + h)
-                std::shared_ptr<ASTNode> f_x_plus_h = node->substitute(var_name, Num(values[var_name] + h));
-                // compute f(x - h)
-                std::shared_ptr<ASTNode> f_x_minus_h = node->substitute(var_name, Num(values[var_name] - h));
-                // compute f(x + h) - f(x)
-                std::shared_ptr<ASTNode> diff = f_x_plus_h - f_x_minus_h;
-                // compute (f(x + h) - f(x - h)) / (2h)
-                std::shared_ptr<ASTNode> acc = diff / (Num(2 * h));
+                variables.emplace_back(pair.first, pair.second);
+            }
 
-                // evaluate the derivative at the values provided
+            std::vector<double> derivative_values(variables.size(), 0.0);
+            std::exception_ptr error;
+            std::mutex error_mutex;
 
-                for (const auto &pair : values)
+            ctorch::parallel::parallel_for_items(
+                variables.size(),
+                1,
+                [&](std::size_t begin, std::size_t end)
                 {
-                    acc = acc->substitute(pair.first, Num(pair.second));
-                }
-
-                acc = acc->simplify();
-
-                // this should now be a NumberNode
-
-                std::shared_ptr<NumberNode> cast = std::dynamic_pointer_cast<NumberNode>(acc);
-
-                // if cast == nullptr, throw an error and show what the missing variables are
-
-                if (cast == nullptr)
-                {
-                    std::set<std::string> vars = acc->variables();
-                    std::string missing_vars = "";
-                    for (const auto &var : vars)
+                    try
                     {
-                        missing_vars += var + " ";
-                    }
-                    throw std::runtime_error("The derivative is not a number node in diff(). Missing variables: " + missing_vars);
-                }
+                        for (std::size_t i = begin; i < end; ++i)
+                        {
+                            const std::string &var_name = variables[i].first;
+                            const double value = variables[i].second;
 
-                derivatives[var_name] = cast->getValue();
+                            // compute the partial derivative
+                            // compute f(x + h)
+                            std::shared_ptr<ASTNode> f_x_plus_h = node->substitute(var_name, Num(value + h));
+                            // compute f(x - h)
+                            std::shared_ptr<ASTNode> f_x_minus_h = node->substitute(var_name, Num(value - h));
+                            // compute f(x + h) - f(x)
+                            std::shared_ptr<ASTNode> diff = f_x_plus_h - f_x_minus_h;
+                            // compute (f(x + h) - f(x - h)) / (2h)
+                            std::shared_ptr<ASTNode> acc = diff / (Num(2 * h));
+
+                            // evaluate the derivative at the values provided
+                            for (const auto &substitution : values)
+                            {
+                                acc = acc->substitute(substitution.first, Num(substitution.second));
+                            }
+
+                            acc = acc->simplify();
+
+                            // this should now be a NumberNode
+                            std::shared_ptr<NumberNode> cast = std::dynamic_pointer_cast<NumberNode>(acc);
+
+                            // if cast == nullptr, throw an error and show what the missing variables are
+                            if (cast == nullptr)
+                            {
+                                std::set<std::string> vars = acc->variables();
+                                std::string missing_vars = "";
+                                for (const auto &var : vars)
+                                {
+                                    missing_vars += var + " ";
+                                }
+                                throw std::runtime_error("The derivative is not a number node in diff(). Missing variables: " + missing_vars);
+                            }
+
+                            derivative_values[i] = cast->getValue();
+                        }
+                    }
+                    catch (...)
+                    {
+                        std::lock_guard<std::mutex> lock(error_mutex);
+                        if (!error)
+                        {
+                            error = std::current_exception();
+                        }
+                    }
+                },
+                2);
+
+            if (error)
+            {
+                std::rethrow_exception(error);
+            }
+
+            for (std::size_t i = 0; i < variables.size(); ++i)
+            {
+                derivatives[variables[i].first] = derivative_values[i];
             }
             return derivatives;
         }

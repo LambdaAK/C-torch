@@ -28,6 +28,7 @@
 #include "math/dataaugmentor.hpp"
 #include "ml/randomfouriersvm.hpp"
 #include "ml/nn.hpp"
+#include "ml/parallel_training.hpp"
 #include "ml/perceptron.hpp"
 #include "ml/knn.hpp"
 #include "ml/gaussian_nb.hpp"
@@ -457,13 +458,15 @@ int main()
     {
         optimizer.zero_grad();
         auto [data, labels] = get_random_batch(xTr, yTr, 64);
-        size_t labels_idx = 0;
-        for (const Matrix &p : get_data_points(data))
-        {
-            Matrix logits = nn_model.forward(p);
-            nn_model.backward(softmax(logits) - one_hot_encode(labels(0, labels_idx), 3));
-            labels_idx++;
-        }
+        const std::vector<Matrix> data_points = get_data_points(data);
+        ml::parallel_backpropagate_batch(
+            nn_model,
+            data_points,
+            [&](ml::Sequential &local_model, const Matrix &p, std::size_t labels_idx)
+            {
+                Matrix logits = local_model.forward(p);
+                local_model.backward(softmax(logits) - one_hot_encode(labels(0, labels_idx), 3));
+            });
         optimizer.step();
     }
 

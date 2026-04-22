@@ -1,4 +1,5 @@
 #include "dqn.hpp"
+#include "ml/parallel_training.hpp"
 
 #include <cctype>
 #include <limits>
@@ -131,40 +132,42 @@ void DQNAgent::update_networks(size_t batch_size)
 {
   auto batch = memory.sample(batch_size);
   optimizer.zero_grad();
-
-  for (const Sample &elt : batch)
-  {
-    std::vector<float> state = elt.state;
-    int action = elt.action;
-    float reward = elt.reward;
-    std::vector<float> next_state = elt.next_state;
-    bool done = elt.done;
-
-    float target;
-    if (done)
-    {
-      target = reward;
-    }
-    else
-    {
-      Matrix next_q_values = target_network.forward(convert_input(next_state));
-      float max_elt = next_q_values(0, 0);
-      for (size_t i = 0; i < next_q_values.numRows(); ++i)
+  ml::parallel_backpropagate_batch(
+      q_network,
+      batch,
+      [&](ml::Sequential &local_q_network, const Sample &elt, std::size_t)
       {
-        if (next_q_values(i, 0) > max_elt)
-        {
-          max_elt = next_q_values(i, 0);
-        }
-      }
-      target = reward + gamma * max_elt;
-    }
+        const std::vector<float> &state = elt.state;
+        const int action = elt.action;
+        const float reward = elt.reward;
+        const std::vector<float> &next_state = elt.next_state;
+        const bool done = elt.done;
 
-    Matrix current_q_values = q_network.forward(convert_input(state));
-    Matrix targets = current_q_values;
-    targets(action, 0) = target;
-    Matrix dL_da = current_q_values - targets;
-    q_network.backward(dL_da);
-  }
+        float target;
+        if (done)
+        {
+          target = reward;
+        }
+        else
+        {
+          Matrix next_q_values = target_network.forward(convert_input(next_state));
+          float max_elt = next_q_values(0, 0);
+          for (size_t i = 0; i < next_q_values.numRows(); ++i)
+          {
+            if (next_q_values(i, 0) > max_elt)
+            {
+              max_elt = next_q_values(i, 0);
+            }
+          }
+          target = reward + gamma * max_elt;
+        }
+
+        Matrix current_q_values = local_q_network.forward(convert_input(state));
+        Matrix targets = current_q_values;
+        targets(action, 0) = target;
+        Matrix dL_da = current_q_values - targets;
+        local_q_network.backward(dL_da);
+      });
 
   optimizer.step();
   steps++;

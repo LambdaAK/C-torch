@@ -6,6 +6,7 @@
 #include <vector>
 #include "dqn.hpp"
 #include "math/matrix.hpp"
+#include "ml/parallel_training.hpp"
 #include "ml/nn.hpp"
 
 TEST(DQN, GreedyActOnlyUsesValidActions) {
@@ -99,6 +100,79 @@ TEST(Sequential, LoadRejectsTruncatedFile) {
 
     EXPECT_FALSE(model.load(path));
     std::filesystem::remove(path);
+}
+
+TEST(Sequential, ParallelBackpropBatchMatchesSerialGradients) {
+    ml::Sequential seed;
+    seed.add_layer(std::make_shared<ml::LinearLayer>(2, 3));
+    seed.add_layer(std::make_shared<ml::ReLULayer>());
+    seed.add_layer(std::make_shared<ml::LinearLayer>(3, 1));
+
+    auto seed_params = seed.parameters();
+    ASSERT_EQ(seed_params.size(), 4u);
+    *seed_params[0].first = Matrix({{0.2, -0.1}, {0.4, 0.3}, {-0.2, 0.5}});
+    *seed_params[1].first = Matrix({{0.1}, {-0.2}, {0.05}});
+    *seed_params[2].first = Matrix({{0.6, -0.4, 0.2}});
+    *seed_params[3].first = Matrix({{0.15}});
+
+    ml::Sequential serial;
+    serial.add_layer(std::make_shared<ml::LinearLayer>(2, 3));
+    serial.add_layer(std::make_shared<ml::ReLULayer>());
+    serial.add_layer(std::make_shared<ml::LinearLayer>(3, 1));
+    ASSERT_TRUE(serial.copy_parameters_from(seed));
+
+    ml::Sequential parallel;
+    parallel.add_layer(std::make_shared<ml::LinearLayer>(2, 3));
+    parallel.add_layer(std::make_shared<ml::ReLULayer>());
+    parallel.add_layer(std::make_shared<ml::LinearLayer>(3, 1));
+    ASSERT_TRUE(parallel.copy_parameters_from(seed));
+
+    std::vector<Matrix> samples = {
+        Matrix({{1.0}, {0.0}}),
+        Matrix({{0.5}, {1.0}}),
+        Matrix({{-1.0}, {0.25}}),
+        Matrix({{0.0}, {0.75}})
+    };
+
+    std::vector<Matrix> upstreams = {
+        Matrix({{1.0}}),
+        Matrix({{-0.5}}),
+        Matrix({{0.25}}),
+        Matrix({{2.0}})
+    };
+
+    ml::NN_SGD serial_optimizer(serial.parameters(), 0.1f, samples.size());
+    serial_optimizer.zero_grad();
+    for (size_t i = 0; i < samples.size(); ++i) {
+        serial.forward(samples[i]);
+        serial.backward(upstreams[i]);
+    }
+
+    ml::NN_SGD parallel_optimizer(parallel.parameters(), 0.1f, samples.size());
+    parallel_optimizer.zero_grad();
+    ml::parallel_backpropagate_batch(
+        parallel,
+        samples,
+        [&](ml::Sequential& local_model, const Matrix& sample, std::size_t sample_index) {
+            local_model.forward(sample);
+            local_model.backward(upstreams[sample_index]);
+        });
+
+    auto serial_params = serial.parameters();
+    auto parallel_params = parallel.parameters();
+    ASSERT_EQ(serial_params.size(), parallel_params.size());
+    for (size_t i = 0; i < serial_params.size(); ++i) {
+        ASSERT_EQ(serial_params[i].second->numRows(), parallel_params[i].second->numRows());
+        ASSERT_EQ(serial_params[i].second->numCols(), parallel_params[i].second->numCols());
+        for (size_t row = 0; row < serial_params[i].second->numRows(); ++row) {
+            for (size_t col = 0; col < serial_params[i].second->numCols(); ++col) {
+                EXPECT_NEAR(
+                    (*serial_params[i].second)(row, col),
+                    (*parallel_params[i].second)(row, col),
+                    1e-9);
+            }
+        }
+    }
 }
 
 TEST(DQN, InvalidUpdateFrequencyThrows) {

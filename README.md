@@ -87,6 +87,7 @@ make py-wheel
 - `optim.hpp`
   - Numerical differentiation
   - Gradient Descent and SGD wrappers over AST-defined losses
+  - Gradient evaluation is parallelized across independent variables
 - `dataaugmentor.*`
   - Feature expansion (`poly_2` to `poly_5`)
   - Random Fourier feature projection
@@ -110,7 +111,7 @@ make py-wheel
   - UCB (`ucb.*`)
 - Neural network primitives:
   - `Sequential`, `LinearLayer`, `ReLULayer`, `SigmoidLayer`, `TanhLayer`
-  - SGD optimizer and simple model save/load (`nn.*`)
+  - SGD optimizer, simple model save/load (`nn.*`), and batch-parallel gradient accumulation helpers
 
 ## Requirements
 

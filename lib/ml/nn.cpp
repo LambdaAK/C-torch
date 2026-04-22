@@ -233,6 +233,15 @@ namespace ml {
         return true;
     }
 
+    Sequential Sequential::copy_for_parallel_training() const {
+        Sequential copy = *this;
+        copy.train_activations.clear();
+        copy.grads.first.clear();
+        copy.grads.second.clear();
+        copy.parameters();
+        return copy;
+    }
+
     Matrix Sequential::forward(const Matrix& x) {
         // apply each layer in sequence
         std::vector<Matrix> activations;
