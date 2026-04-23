@@ -19,8 +19,10 @@
 
 #include "distributed/distributed_sync.hpp"
 #include "distributed/distributed_checkpoint.hpp"
+#include "distributed/distributed_optimizer.hpp"
 #include "distributed/distributed_training.hpp"
 #include "distributed/tcp_process_group.hpp"
+#include "math/optim.hpp"
 #include "math/matrix.hpp"
 #include "ml/nn.hpp"
 #include "ml/nn_optim.hpp"
@@ -31,6 +33,11 @@ struct WorkerResult
 {
     std::vector<Matrix> parameters;
     Matrix reduced;
+};
+
+struct ThetaResult
+{
+    std::unordered_map<std::string, double> theta;
 };
 
 std::uint16_t reserve_port()
@@ -160,6 +167,79 @@ bool matrices_match(const Matrix &lhs, const Matrix &rhs)
             {
                 return false;
             }
+        }
+    }
+
+    return true;
+}
+
+class LogisticLossFunction final : public LossFunction
+{
+public:
+    std::shared_ptr<math::ASTNode> sample_loss(const Matrix &x, int y) const override
+    {
+        std::shared_ptr<math::ASTNode> logits = math::Num(0.0);
+        for (std::size_t i = 0; i < x.numCols(); ++i)
+        {
+            logits = logits + math::Var("w" + std::to_string(i)) * math::Num(x.at(0, i));
+        }
+
+        logits = logits + math::Var("b");
+        std::shared_ptr<math::ASTNode> y_hat = math::Sigmoid(logits);
+        return -math::Num(static_cast<double>(y)) * math::Log(y_hat) -
+               (math::Num(1.0) - math::Num(static_cast<double>(y))) * math::Log(math::Num(1.0) - y_hat);
+    }
+
+    std::shared_ptr<math::ASTNode> regularizer() const override
+    {
+        return math::Num(0.0);
+    }
+};
+
+std::pair<Matrix, Matrix> make_logistic_dataset()
+{
+    constexpr std::size_t grid_size = 8;
+    constexpr std::size_t sample_count = grid_size * grid_size;
+    Matrix x(sample_count, 2);
+    Matrix y(1, sample_count);
+
+    std::size_t index = 0;
+    for (std::size_t row = 0; row < grid_size; ++row)
+    {
+        const double x0 = -1.5 + 3.0 * static_cast<double>(row) / static_cast<double>(grid_size - 1);
+        for (std::size_t col = 0; col < grid_size; ++col)
+        {
+            const double x1 = -1.5 + 3.0 * static_cast<double>(col) / static_cast<double>(grid_size - 1);
+            x(index, 0) = x0;
+            x(index, 1) = x1;
+            y(0, index) = (x0 + 0.75 * x1 > 0.1) ? 1.0 : 0.0;
+            ++index;
+        }
+    }
+
+    return {x, y};
+}
+
+bool theta_matches(
+    const std::unordered_map<std::string, double> &lhs,
+    const std::unordered_map<std::string, double> &rhs,
+    double tolerance = 1e-8)
+{
+    if (lhs.size() != rhs.size())
+    {
+        return false;
+    }
+
+    for (const auto &entry : lhs)
+    {
+        const auto it = rhs.find(entry.first);
+        if (it == rhs.end())
+        {
+            return false;
+        }
+        if (std::abs(entry.second - it->second) > tolerance)
+        {
+            return false;
         }
     }
 
@@ -484,6 +564,78 @@ TEST(Distributed, OptimizerCheckpointRoundTripPreservesFutureSteps)
 
     std::filesystem::remove(prefix + ".model");
     std::filesystem::remove(prefix + ".optim");
+}
+
+TEST(Distributed, DistributedAstOptimizerMatchesSerialLogisticRegression)
+{
+    const std::uint16_t port = reserve_port();
+    const auto [x, y] = make_logistic_dataset();
+    const auto loss_function = std::make_shared<LogisticLossFunction>();
+    const math::OptimParams optim_params(
+        math::OptimType::GD,
+        0.15,
+        200,
+        Matrix(),
+        Matrix(),
+        1);
+    const std::unordered_map<std::string, double> initial_theta = {
+        {"w0", 0.0},
+        {"w1", 0.0},
+        {"b", 0.0},
+    };
+
+    math::Optimizer serial_optimizer(optim_params);
+    const std::unordered_map<std::string, double> serial_theta =
+        serial_optimizer.optimize(loss_function, x, y, initial_theta);
+
+    std::promise<ThetaResult> root_promise;
+    std::promise<ThetaResult> peer_promise;
+    std::future<ThetaResult> root_future = root_promise.get_future();
+    std::future<ThetaResult> peer_future = peer_promise.get_future();
+
+    std::thread root_thread([&]() {
+        try
+        {
+            ctorch::distributed::TcpProcessGroup group("127.0.0.1", port, 0, 2);
+            ctorch::distributed::DistributedOptimizer optimizer(group, optim_params);
+            ThetaResult result;
+            result.theta = optimizer.optimize(loss_function, x, y, initial_theta);
+            root_promise.set_value(std::move(result));
+        }
+        catch (...)
+        {
+            root_promise.set_exception(std::current_exception());
+        }
+    });
+
+    std::thread peer_thread([&]() {
+        try
+        {
+            auto sleep_fn = []() {
+                std::this_thread::sleep_for(std::chrono::milliseconds(20));
+            };
+            std::unique_ptr<ctorch::distributed::TcpProcessGroup> group =
+                connect_with_retry("127.0.0.1", port, 1, 2, sleep_fn);
+            ctorch::distributed::DistributedOptimizer optimizer(*group, optim_params);
+            ThetaResult result;
+            result.theta = optimizer.optimize(loss_function, x, y, initial_theta);
+            peer_promise.set_value(std::move(result));
+        }
+        catch (...)
+        {
+            peer_promise.set_exception(std::current_exception());
+        }
+    });
+
+    root_thread.join();
+    peer_thread.join();
+
+    const ThetaResult root_result = root_future.get();
+    const ThetaResult peer_result = peer_future.get();
+
+    ASSERT_TRUE(theta_matches(root_result.theta, serial_theta));
+    ASSERT_TRUE(theta_matches(peer_result.theta, serial_theta));
+    ASSERT_TRUE(theta_matches(root_result.theta, peer_result.theta));
 }
 
 TEST(Distributed, SynchronizeSequentialModelRejectsMismatchedArchitecture)

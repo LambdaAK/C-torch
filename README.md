@@ -16,7 +16,7 @@ This codebase is primarily experiment-driven and educational/research oriented.
 Build the `ctorch_c` shared library first (see [optional Python bindings](#optional-python-bindings-ctypes)). From the repository root:
 
 ```bash
-make py FILE=your_script.py
+make py FILE=your_script.py [ARGS="..."]
 ```
 
 Equivalent:
@@ -52,10 +52,11 @@ make py-wheel
 
 ```text
 .
-├── Makefile            # convenience: make build / make test / make py FILE=... / make py-wheel
+├── Makefile            # convenience: make build / make test / make py FILE=... ARGS=... / make py-wheel
 ├── CMakeLists.txt      # unified build (classification + ndtictactoe + demos + optional recommender)
 ├── scripts/            # e.g. git-untrack-artifacts.sh
-├── examples/python/    # typed train/infer workflow for Python bindings
+├── examples/python/    # typed Python examples for bindings
+├── examples/distributed/ # standalone distributed training demos
 ├── demos/              # self-contained demonstration programs (C++ and Python)
 ├── lib/
 │   ├── math/           # matrix ops, AST, differentiator, optimizers, augmentation
@@ -161,12 +162,13 @@ To skip tests (no network fetch for googletest): `cmake -B build -DCTORCH_BUILD_
 ```bash
 make build    # cmake -B build && cmake --build build
 make test     # build + ctest
-make py FILE=your_script.py   # python3 with PYTHONPATH=./python (ctorch bindings)
+make py FILE=your_script.py [ARGS="..."]   # python3 with PYTHONPATH=./python (ctorch bindings)
 make py-bindings   # builds build/libctorch_c.{dylib,so,dll}
 make py-wheel      # builds dist/*.whl (stages native library first)
 make kernel-demo   # builds the concentric-circles Kernel SVM demo
 make linear-regression-demo   # builds the noisy line regression demo
 make logistic-regression-demo # builds the blob classification demo
+make distributed-logistic-demo # builds the distributed logistic regression demo
 make classification   # make -C experiments/classification
 make ndtictactoe     # make -C experiments/ndtictactoe
 ```
@@ -263,6 +265,31 @@ Typed train/infer workflow example:
 python3 examples/python/train_infer_sequential.py train --model-path artifacts/py_models/line.model
 python3 examples/python/train_infer_sequential.py infer --model-path artifacts/py_models/line.model --x 1.75
 ```
+
+Neural-network regression example:
+
+```bash
+make py FILE=examples/python/train_nn_regression.py
+python3 examples/python/train_nn_regression.py infer --model-path artifacts/py_models/nonlinear_regression.model --x0 0.25 --x1 -0.75
+```
+
+Distributed Python NN example:
+
+```bash
+make py FILE=examples/python/train_nn_regression.py ARGS="--distributed --rank 0 --world-size 2"
+make py FILE=examples/python/train_nn_regression.py ARGS="--distributed --rank 1 --world-size 2"
+```
+
+Add `--checkpoint-prefix artifacts/py_models/nonlinear_regression` and `--resume-checkpoint` to save and reload distributed state.
+
+Distributed C++ logistic regression demo:
+
+```bash
+./build/distributed_logistic_demo --rank 0 --world-size 2
+./build/distributed_logistic_demo --rank 1 --world-size 2
+```
+
+Start rank `0` first for both distributed examples so the TCP master is listening before the other rank connects.
 
 More package notes: [`python/README.md`](python/README.md).
 

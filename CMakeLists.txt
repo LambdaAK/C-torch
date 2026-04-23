@@ -100,6 +100,17 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
     target_compile_options(ttt_main PRIVATE -Wall -Wextra)
 endif()
 
+add_executable(distributed_logistic_demo
+    examples/distributed/distributed_logistic_regression.cpp
+)
+target_include_directories(distributed_logistic_demo PRIVATE
+    ${CMAKE_SOURCE_DIR}/lib
+)
+target_link_libraries(distributed_logistic_demo PRIVATE ctorch)
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
+    target_compile_options(distributed_logistic_demo PRIVATE -Wall -Wextra)
+endif()
+
 add_subdirectory(demos)
 
 option(CTORCH_BUILD_TESTS "Build GoogleTest unit tests (downloads googletest)" ON)

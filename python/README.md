@@ -46,4 +46,21 @@ python3 examples/python/train_infer_sequential.py train --model-path artifacts/p
 python3 examples/python/train_infer_sequential.py infer --model-path artifacts/py_models/line.model --x 1.75
 ```
 
+For a small nonlinear neural-network demo:
+
+```bash
+make py FILE=examples/python/train_nn_regression.py
+python3 examples/python/train_nn_regression.py infer --model-path artifacts/py_models/nonlinear_regression.model --x0 0.25 --x1 -0.75
+```
+
+Distributed mode:
+
+```bash
+make py FILE=examples/python/train_nn_regression.py ARGS="--distributed --rank 0 --world-size 2"
+make py FILE=examples/python/train_nn_regression.py ARGS="--distributed --rank 1 --world-size 2"
+```
+
+Add `--checkpoint-prefix artifacts/py_models/nonlinear_regression` to save distributed checkpoints, and `--resume-checkpoint` to reload them.
+Start rank `0` first so the TCP master is listening before the other rank connects.
+
 For notebook usage, set `CTORCH_LIB_PATH` before importing `ctorch` if the shared library is outside the package directory.

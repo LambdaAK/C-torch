@@ -22,6 +22,7 @@ __all__ = [
     "PCA",
     "MAB",
     "UCB",
+    "TcpProcessGroup",
     "Sequential",
     "NNOptimizer",
     "OptimType",
@@ -101,15 +102,14 @@ def _candidate_library_paths() -> list[Path]:
         "ctorch_c.dll",
         "libctorch_c.dll",
     ]
-    for name in names:
-        paths.append(package_dir / name)
-
     build_dir = repo_root / "build"
     for name in names:
         paths.append(build_dir / name)
     for config in ("Debug", "Release", "RelWithDebInfo", "MinSizeRel"):
         for name in names:
             paths.append(build_dir / config / name)
+    for name in names:
+        paths.append(package_dir / name)
 
     return paths
 
@@ -430,6 +430,29 @@ _lib.ctorch_ucb_select_arm.restype = ct.c_bool
 _lib.ctorch_ucb_update.argtypes = [ct.c_void_p, ct.c_int, ct.c_double]
 _lib.ctorch_ucb_update.restype = ct.c_bool
 
+_lib.ctorch_tcp_process_group_create.argtypes = [ct.c_char_p, ct.c_uint16, ct.c_int, ct.c_int]
+_lib.ctorch_tcp_process_group_create.restype = ct.c_void_p
+_lib.ctorch_tcp_process_group_destroy.argtypes = [ct.c_void_p]
+_lib.ctorch_tcp_process_group_destroy.restype = None
+_lib.ctorch_tcp_process_group_rank.argtypes = [ct.c_void_p]
+_lib.ctorch_tcp_process_group_rank.restype = ct.c_int
+_lib.ctorch_tcp_process_group_world_size.argtypes = [ct.c_void_p]
+_lib.ctorch_tcp_process_group_world_size.restype = ct.c_int
+_lib.ctorch_tcp_process_group_barrier.argtypes = [ct.c_void_p]
+_lib.ctorch_tcp_process_group_barrier.restype = ct.c_bool
+_lib.ctorch_tcp_process_group_broadcast_matrix.argtypes = [ct.c_void_p, ct.c_void_p, ct.c_int]
+_lib.ctorch_tcp_process_group_broadcast_matrix.restype = ct.c_bool
+_lib.ctorch_tcp_process_group_allreduce_sum_matrix.argtypes = [ct.c_void_p, ct.c_void_p]
+_lib.ctorch_tcp_process_group_allreduce_sum_matrix.restype = ct.c_bool
+_lib.ctorch_distributed_synchronize_sequential_model.argtypes = [ct.c_void_p, ct.c_void_p]
+_lib.ctorch_distributed_synchronize_sequential_model.restype = ct.c_bool
+_lib.ctorch_distributed_allreduce_sequential_gradients.argtypes = [ct.c_void_p, ct.c_void_p]
+_lib.ctorch_distributed_allreduce_sequential_gradients.restype = ct.c_bool
+_lib.ctorch_distributed_save_checkpoint.argtypes = [ct.c_void_p, ct.c_char_p, ct.c_void_p, ct.c_void_p]
+_lib.ctorch_distributed_save_checkpoint.restype = ct.c_bool
+_lib.ctorch_distributed_load_checkpoint.argtypes = [ct.c_void_p, ct.c_char_p, ct.c_void_p, ct.c_void_p]
+_lib.ctorch_distributed_load_checkpoint.restype = ct.c_bool
+
 _lib.ctorch_sequential_create.argtypes = []
 _lib.ctorch_sequential_create.restype = ct.c_void_p
 _lib.ctorch_sequential_destroy.argtypes = [ct.c_void_p]
@@ -486,6 +509,10 @@ _lib.ctorch_nn_optimizer_zero_grad.argtypes = [ct.c_void_p]
 _lib.ctorch_nn_optimizer_zero_grad.restype = ct.c_bool
 _lib.ctorch_nn_optimizer_step.argtypes = [ct.c_void_p]
 _lib.ctorch_nn_optimizer_step.restype = ct.c_bool
+_lib.ctorch_nn_optimizer_save_state.argtypes = [ct.c_void_p, ct.c_char_p]
+_lib.ctorch_nn_optimizer_save_state.restype = ct.c_bool
+_lib.ctorch_nn_optimizer_load_state.argtypes = [ct.c_void_p, ct.c_char_p]
+_lib.ctorch_nn_optimizer_load_state.restype = ct.c_bool
 
 _lib.ctorch_matrix_eye.argtypes = [ct.c_size_t]
 _lib.ctorch_matrix_eye.restype = ct.c_void_p
@@ -1638,6 +1665,98 @@ class UCB:
             self._ptr = ct.c_void_p()
 
 
+class TcpProcessGroup:
+    __slots__ = ("_ptr",)
+
+    def __init__(
+        self,
+        master_address: str,
+        master_port: int,
+        rank: int,
+        world_size: int,
+    ) -> None:
+        ptr = _lib.ctorch_tcp_process_group_create(
+            master_address.encode("utf-8"),
+            ct.c_uint16(int(master_port)),
+            int(rank),
+            int(world_size),
+        )
+        if not ptr:
+            raise _raise_last_error("TcpProcessGroup(...) failed")
+        self._ptr = ct.c_void_p(ptr)
+
+    @property
+    def rank(self) -> int:
+        return int(_lib.ctorch_tcp_process_group_rank(self._ptr))
+
+    @property
+    def world_size(self) -> int:
+        return int(_lib.ctorch_tcp_process_group_world_size(self._ptr))
+
+    def barrier(self) -> None:
+        ok = _lib.ctorch_tcp_process_group_barrier(self._ptr)
+        if not ok:
+            raise _raise_last_error("TcpProcessGroup.barrier failed")
+
+    def broadcast(self, value: Matrix, root_rank: int = 0) -> None:
+        ok = _lib.ctorch_tcp_process_group_broadcast_matrix(self._ptr, value._ptr, int(root_rank))
+        if not ok:
+            raise _raise_last_error("TcpProcessGroup.broadcast failed")
+
+    def allreduce_sum(self, value: Matrix) -> None:
+        ok = _lib.ctorch_tcp_process_group_allreduce_sum_matrix(self._ptr, value._ptr)
+        if not ok:
+            raise _raise_last_error("TcpProcessGroup.allreduce_sum failed")
+
+    def synchronize_sequential_model(self, model: "Sequential") -> None:
+        if not isinstance(model, Sequential):
+            raise TypeError("model must be a Sequential")
+        ok = _lib.ctorch_distributed_synchronize_sequential_model(self._ptr, model._ptr)
+        if not ok:
+            raise _raise_last_error("TcpProcessGroup.synchronize_sequential_model failed")
+
+    def allreduce_sequential_gradients(self, model: "Sequential") -> None:
+        if not isinstance(model, Sequential):
+            raise TypeError("model must be a Sequential")
+        ok = _lib.ctorch_distributed_allreduce_sequential_gradients(self._ptr, model._ptr)
+        if not ok:
+            raise _raise_last_error("TcpProcessGroup.allreduce_sequential_gradients failed")
+
+    def save_checkpoint(self, prefix: str, model: "Sequential", optimizer: "NNOptimizer") -> None:
+        if not isinstance(model, Sequential):
+            raise TypeError("model must be a Sequential")
+        if not isinstance(optimizer, NNOptimizer):
+            raise TypeError("optimizer must be an NNOptimizer")
+        ok = _lib.ctorch_distributed_save_checkpoint(
+            self._ptr,
+            str(prefix).encode("utf-8"),
+            model._ptr,
+            optimizer._ptr,
+        )
+        if not ok:
+            raise _raise_last_error("TcpProcessGroup.save_checkpoint failed")
+
+    def load_checkpoint(self, prefix: str, model: "Sequential", optimizer: "NNOptimizer") -> None:
+        if not isinstance(model, Sequential):
+            raise TypeError("model must be a Sequential")
+        if not isinstance(optimizer, NNOptimizer):
+            raise TypeError("optimizer must be an NNOptimizer")
+        ok = _lib.ctorch_distributed_load_checkpoint(
+            self._ptr,
+            str(prefix).encode("utf-8"),
+            model._ptr,
+            optimizer._ptr,
+        )
+        if not ok:
+            raise _raise_last_error("TcpProcessGroup.load_checkpoint failed")
+
+    def __del__(self) -> None:
+        ptr = getattr(self, "_ptr", None)
+        if ptr:
+            _lib.ctorch_tcp_process_group_destroy(ptr)
+            self._ptr = ct.c_void_p()
+
+
 class Sequential:
     """Feed-forward stack of linear and activation layers (matches C++ alternating layout)."""
 
@@ -1804,6 +1923,16 @@ class NNOptimizer:
         ok = _lib.ctorch_nn_optimizer_step(self._ptr)
         if not ok:
             raise _raise_last_error("NNOptimizer.step failed")
+
+    def save_state(self, filepath: str) -> None:
+        ok = _lib.ctorch_nn_optimizer_save_state(self._ptr, str(filepath).encode("utf-8"))
+        if not ok:
+            raise _raise_last_error("NNOptimizer.save_state failed")
+
+    def load_state(self, filepath: str) -> None:
+        ok = _lib.ctorch_nn_optimizer_load_state(self._ptr, str(filepath).encode("utf-8"))
+        if not ok:
+            raise _raise_last_error("NNOptimizer.load_state failed")
 
     def __del__(self) -> None:
         ptr = getattr(self, "_ptr", None)

@@ -11,6 +11,9 @@
 #include "math/dataaugmentor.hpp"
 #include "math/matrix.hpp"
 #include "math/optim.hpp"
+#include "distributed/distributed_checkpoint.hpp"
+#include "distributed/distributed_sync.hpp"
+#include "distributed/tcp_process_group.hpp"
 #include "ml/gaussian_nb.hpp"
 #include "ml/kernelsvm.hpp"
 #include "ml/kmeans.hpp"
@@ -343,6 +346,11 @@ struct CTorchUCB
     std::unique_ptr<ml::UCB> value;
 };
 
+struct CTorchTcpProcessGroup
+{
+    std::unique_ptr<ctorch::distributed::TcpProcessGroup> value;
+};
+
 struct CTorchSequential
 {
     std::unique_ptr<ml::Sequential> value;
@@ -526,6 +534,24 @@ ml::UCB& as_ucb_mut(CTorchUCB* handle)
     if (handle == nullptr || handle->value == nullptr)
     {
         throw std::invalid_argument("ucb handle is null");
+    }
+    return *handle->value;
+}
+
+ctorch::distributed::ProcessGroup& as_process_group_ref(CTorchTcpProcessGroup* handle)
+{
+    if (handle == nullptr || handle->value == nullptr)
+    {
+        throw std::invalid_argument("process group handle is null");
+    }
+    return *handle->value;
+}
+
+const ctorch::distributed::ProcessGroup& as_process_group_ref(const CTorchTcpProcessGroup* handle)
+{
+    if (handle == nullptr || handle->value == nullptr)
+    {
+        throw std::invalid_argument("process group handle is null");
     }
     return *handle->value;
 }
@@ -1481,6 +1507,139 @@ bool ctorch_ucb_update(CTorchUCB* model, int arm, double reward)
     }, false);
 }
 
+CTorchTcpProcessGroup* ctorch_tcp_process_group_create(
+    const char* master_address,
+    uint16_t master_port,
+    int rank,
+    int world_size)
+{
+    return run_api<CTorchTcpProcessGroup*>([&]() -> CTorchTcpProcessGroup* {
+        if (master_address == nullptr)
+        {
+            throw std::invalid_argument("master_address is null");
+        }
+        auto handle = std::make_unique<CTorchTcpProcessGroup>();
+        handle->value = std::make_unique<ctorch::distributed::TcpProcessGroup>(
+            master_address,
+            master_port,
+            rank,
+            world_size);
+        return handle.release();
+    }, nullptr);
+}
+
+void ctorch_tcp_process_group_destroy(CTorchTcpProcessGroup* group)
+{
+    delete group;
+}
+
+int ctorch_tcp_process_group_rank(const CTorchTcpProcessGroup* group)
+{
+    return run_api<int>([&]() -> int {
+        return as_process_group_ref(group).rank();
+    }, 0);
+}
+
+int ctorch_tcp_process_group_world_size(const CTorchTcpProcessGroup* group)
+{
+    return run_api<int>([&]() -> int {
+        return as_process_group_ref(group).world_size();
+    }, 1);
+}
+
+bool ctorch_tcp_process_group_barrier(CTorchTcpProcessGroup* group)
+{
+    return run_api<bool>([&]() -> bool {
+        as_process_group_ref(group).barrier();
+        return true;
+    }, false);
+}
+
+bool ctorch_tcp_process_group_broadcast_matrix(
+    CTorchTcpProcessGroup* group,
+    CTorchMatrix* value,
+    int root_rank)
+{
+    return run_api<bool>([&]() -> bool {
+        as_process_group_ref(group).broadcast(as_matrix_mut(value), root_rank);
+        return true;
+    }, false);
+}
+
+bool ctorch_tcp_process_group_allreduce_sum_matrix(
+    CTorchTcpProcessGroup* group,
+    CTorchMatrix* value)
+{
+    return run_api<bool>([&]() -> bool {
+        as_process_group_ref(group).allreduce_sum(as_matrix_mut(value));
+        return true;
+    }, false);
+}
+
+bool ctorch_distributed_synchronize_sequential_model(
+    CTorchTcpProcessGroup* group,
+    CTorchSequential* model)
+{
+    return run_api<bool>([&]() -> bool {
+        ctorch::distributed::synchronize_sequential_model(
+            as_process_group_ref(group),
+            as_sequential_mut(model));
+        return true;
+    }, false);
+}
+
+bool ctorch_distributed_allreduce_sequential_gradients(
+    CTorchTcpProcessGroup* group,
+    CTorchSequential* model)
+{
+    return run_api<bool>([&]() -> bool {
+        ctorch::distributed::allreduce_sequential_gradients(
+            as_process_group_ref(group),
+            as_sequential_mut(model));
+        return true;
+    }, false);
+}
+
+bool ctorch_distributed_save_checkpoint(
+    CTorchTcpProcessGroup* group,
+    const char* prefix,
+    CTorchSequential* model,
+    CTorchNNOptimizer* optimizer)
+{
+    return run_api<bool>([&]() -> bool {
+        if (prefix == nullptr)
+        {
+            throw std::invalid_argument("prefix is null");
+        }
+        ctorch::distributed::save_distributed_checkpoint(
+            as_process_group_ref(group),
+            prefix,
+            as_sequential_mut(model),
+            as_nn_optimizer_mut(optimizer));
+        return true;
+    }, false);
+}
+
+bool ctorch_distributed_load_checkpoint(
+    CTorchTcpProcessGroup* group,
+    const char* prefix,
+    CTorchSequential* model,
+    CTorchNNOptimizer* optimizer)
+{
+    return run_api<bool>([&]() -> bool {
+        if (prefix == nullptr)
+        {
+            throw std::invalid_argument("prefix is null");
+        }
+        ctorch::distributed::load_distributed_checkpoint(
+            as_process_group_ref(group),
+            prefix,
+            as_sequential_mut(model),
+            as_nn_optimizer_mut(optimizer));
+        return true;
+    }, false);
+}
+
 CTorchSequential* ctorch_sequential_create(void)
 {
     return run_api<CTorchSequential*>([&]() -> CTorchSequential* {
@@ -1731,6 +1890,38 @@ bool ctorch_nn_optimizer_step(CTorchNNOptimizer* optimizer)
     return run_api<bool>([&]() -> bool {
         as_nn_optimizer_mut(optimizer).step();
         return true;
+    }, false);
+}
+
+bool ctorch_nn_optimizer_save_state(CTorchNNOptimizer* optimizer, const char* filepath)
+{
+    return run_api<bool>([&]() -> bool {
+        if (filepath == nullptr)
+        {
+            throw std::invalid_argument("filepath is null");
+        }
+        const bool ok = as_nn_optimizer_mut(optimizer).save_state(filepath);
+        if (!ok)
+        {
+            set_error("nn optimizer save_state failed");
+        }
+        return ok;
+    }, false);
+}
+
+bool ctorch_nn_optimizer_load_state(CTorchNNOptimizer* optimizer, const char* filepath)
+{
+    return run_api<bool>([&]() -> bool {
+        if (filepath == nullptr)
+        {
+            throw std::invalid_argument("filepath is null");
+        }
+        const bool ok = as_nn_optimizer_mut(optimizer).load_state(filepath);
+        if (!ok)
+        {
+            set_error("nn optimizer load_state failed");
+        }
+        return ok;
     }, false);
 }
 

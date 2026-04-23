@@ -5,6 +5,7 @@
 
 #include <cstddef>
 #include <stdbool.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -23,6 +24,7 @@ typedef struct CTorchKMeans CTorchKMeans;
 typedef struct CTorchPCA CTorchPCA;
 typedef struct CTorchMAB CTorchMAB;
 typedef struct CTorchUCB CTorchUCB;
+typedef struct CTorchTcpProcessGroup CTorchTcpProcessGroup;
 typedef struct CTorchSequential CTorchSequential;
 typedef struct CTorchNNOptimizer CTorchNNOptimizer;
 typedef struct CTorchExpr CTorchExpr;
@@ -297,6 +299,40 @@ void ctorch_ucb_destroy(CTorchUCB* model);
 bool ctorch_ucb_select_arm(CTorchUCB* model, int* out_arm);
 bool ctorch_ucb_update(CTorchUCB* model, int arm, double reward);
 
+CTorchTcpProcessGroup* ctorch_tcp_process_group_create(
+    const char* master_address,
+    uint16_t master_port,
+    int rank,
+    int world_size);
+void ctorch_tcp_process_group_destroy(CTorchTcpProcessGroup* group);
+int ctorch_tcp_process_group_rank(const CTorchTcpProcessGroup* group);
+int ctorch_tcp_process_group_world_size(const CTorchTcpProcessGroup* group);
+bool ctorch_tcp_process_group_barrier(CTorchTcpProcessGroup* group);
+bool ctorch_tcp_process_group_broadcast_matrix(
+    CTorchTcpProcessGroup* group,
+    CTorchMatrix* value,
+    int root_rank);
+bool ctorch_tcp_process_group_allreduce_sum_matrix(
+    CTorchTcpProcessGroup* group,
+    CTorchMatrix* value);
+
+bool ctorch_distributed_synchronize_sequential_model(
+    CTorchTcpProcessGroup* group,
+    CTorchSequential* model);
+bool ctorch_distributed_allreduce_sequential_gradients(
+    CTorchTcpProcessGroup* group,
+    CTorchSequential* model);
+bool ctorch_distributed_save_checkpoint(
+    CTorchTcpProcessGroup* group,
+    const char* prefix,
+    CTorchSequential* model,
+    CTorchNNOptimizer* optimizer);
+bool ctorch_distributed_load_checkpoint(
+    CTorchTcpProcessGroup* group,
+    const char* prefix,
+    CTorchSequential* model,
+    CTorchNNOptimizer* optimizer);
+
 CTorchSequential* ctorch_sequential_create(void);
 void ctorch_sequential_destroy(CTorchSequential* model);
 bool ctorch_sequential_add_linear(CTorchSequential* model, int input_dim, int output_dim);
@@ -331,6 +367,8 @@ CTorchNNOptimizer* ctorch_nn_optimizer_create(
 void ctorch_nn_optimizer_destroy(CTorchNNOptimizer* optimizer);
 bool ctorch_nn_optimizer_zero_grad(CTorchNNOptimizer* optimizer);
 bool ctorch_nn_optimizer_step(CTorchNNOptimizer* optimizer);
+bool ctorch_nn_optimizer_save_state(CTorchNNOptimizer* optimizer, const char* filepath);
+bool ctorch_nn_optimizer_load_state(CTorchNNOptimizer* optimizer, const char* filepath);
 
 CTorchMatrix* ctorch_matrix_eye(size_t dim);
 CTorchMatrix* ctorch_matrix_row(const CTorchMatrix* matrix, size_t row);
