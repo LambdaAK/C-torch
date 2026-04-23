@@ -24,6 +24,7 @@ add_executable(ctorch_tests
     test_svm.cpp
     test_random_fourier_svm.cpp
     test_gaussian_nb.cpp
+    test_distributed.cpp
     test_dqn.cpp
     test_reinforce.cpp
     test_tictactoe.cpp
@@ -51,4 +52,4 @@ target_sources(ctorch_tests PRIVATE
 )
 
 include(GoogleTest)
-gtest_discover_tests(ctorch_tests)
+gtest_discover_tests(ctorch_tests DISCOVERY_TIMEOUT 60)

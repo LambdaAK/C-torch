@@ -3,6 +3,7 @@
 #include <fstream>
 #include <memory>
 #include <random>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -250,6 +251,15 @@ namespace ml {
        * @return Number of parameter tensors (`2 * linear_layer_count()`).
        */
       size_t parameter_count() const;
+
+      /**
+       * @brief Returns a stable text signature of the layer topology.
+       *
+       * The signature is used by distributed training to verify that every rank
+       * instantiated the same model architecture before parameters are broadcast.
+       * @return Canonical architecture description string.
+       */
+      std::string architecture_signature() const;
 
       /**
        * @brief Copies a parameter tensor by flat parameter index.

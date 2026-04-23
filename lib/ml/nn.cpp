@@ -1,6 +1,7 @@
 #include "nn.hpp"
 
 #include <cmath>
+#include <sstream>
 #include <stdexcept>
 
 
@@ -148,6 +149,43 @@ namespace ml {
 
     size_t Sequential::parameter_count() const {
         return linear_layer_count() * 2;
+    }
+
+    std::string Sequential::architecture_signature() const {
+        std::ostringstream out;
+        out << "layers=" << layers.size() << ";params=" << parameter_count() << ";";
+
+        bool first = true;
+        for (const auto& layer : layers) {
+            if (!first) {
+                out << "|";
+            }
+            first = false;
+
+            if (const auto* linear = dynamic_cast<const LinearLayer*>(layer.get())) {
+                out << "Linear(" << linear->get_input_dim() << "," << linear->get_output_dim() << ")";
+                continue;
+            }
+
+            if (dynamic_cast<const ReLULayer*>(layer.get()) != nullptr) {
+                out << "ReLU";
+                continue;
+            }
+
+            if (dynamic_cast<const SigmoidLayer*>(layer.get()) != nullptr) {
+                out << "Sigmoid";
+                continue;
+            }
+
+            if (dynamic_cast<const TanhLayer*>(layer.get()) != nullptr) {
+                out << "Tanh";
+                continue;
+            }
+
+            out << "Unknown";
+        }
+
+        return out.str();
     }
 
     bool Sequential::get_parameter(size_t index, Matrix& out_parameter) const {

@@ -24,6 +24,7 @@ set(CTORCH_SOURCES
     lib/ml/randomfouriersvm.cpp
     lib/ml/kernelsvm.cpp
     lib/ml/kmeans.cpp
+    lib/distributed/tcp_process_group.cpp
     lib/ml/mab.cpp
     lib/ml/ucb.cpp
     lib/ml/pca.cpp
