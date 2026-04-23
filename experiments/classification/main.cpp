@@ -2,6 +2,7 @@
 #include <iomanip>
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <cstddef>
 #include <deque>
 #include <fstream>
@@ -26,6 +27,9 @@
 #include "ml/linearregression.hpp"
 #include "ml/kernelsvm.hpp"
 #include "math/dataaugmentor.hpp"
+#include "distributed/distributed_sync.hpp"
+#include "distributed/distributed_training.hpp"
+#include "distributed/tcp_process_group.hpp"
 #include "ml/randomfouriersvm.hpp"
 #include "ml/nn.hpp"
 #include "ml/parallel_training.hpp"
@@ -37,6 +41,116 @@
 
 // log macro that prints the input
 #define LOG(x) std::cout << x << std::endl
+
+struct ProgramOptions
+{
+    bool distributed = false;
+    int rank = 0;
+    int world_size = 1;
+    std::string master_address = "127.0.0.1";
+    std::uint16_t master_port = 29500;
+    std::size_t epochs = 1000;
+    std::size_t batch_size = 64;
+    std::uint64_t seed = 1337;
+};
+
+void print_usage(const char *program_name)
+{
+    std::cout << "Usage: " << program_name << " [options]\n"
+              << "  --distributed           Enable synchronous data-parallel training\n"
+              << "  --rank <n>              Worker rank (default: 0)\n"
+              << "  --world-size <n>        Total number of workers (default: 1)\n"
+              << "  --master-addr <addr>    TCP master address (default: 127.0.0.1)\n"
+              << "  --master-port <port>    TCP master port (default: 29500)\n"
+              << "  --batch-size <n>        Global batch size for NN training (default: 64)\n"
+              << "  --epochs <n>            NN training iterations (default: 1000)\n"
+              << "  --seed <n>              Deterministic RNG seed (default: 1337)\n";
+}
+
+ProgramOptions parse_program_options(int argc, char **argv)
+{
+    ProgramOptions options;
+
+    for (int i = 1; i < argc; ++i)
+    {
+        const std::string arg = argv[i];
+        auto require_value = [&](const char *name) -> std::string
+        {
+            if (i + 1 >= argc)
+            {
+                throw std::invalid_argument(std::string(name) + " requires a value.");
+            }
+            return argv[++i];
+        };
+
+        if (arg == "--distributed")
+        {
+            options.distributed = true;
+            continue;
+        }
+        if (arg == "--rank")
+        {
+            options.rank = std::stoi(require_value("--rank"));
+            continue;
+        }
+        if (arg == "--world-size")
+        {
+            options.world_size = std::stoi(require_value("--world-size"));
+            continue;
+        }
+        if (arg == "--master-addr")
+        {
+            options.master_address = require_value("--master-addr");
+            continue;
+        }
+        if (arg == "--master-port")
+        {
+            options.master_port = static_cast<std::uint16_t>(std::stoul(require_value("--master-port")));
+            continue;
+        }
+        if (arg == "--batch-size")
+        {
+            options.batch_size = static_cast<std::size_t>(std::stoul(require_value("--batch-size")));
+            continue;
+        }
+        if (arg == "--epochs")
+        {
+            options.epochs = static_cast<std::size_t>(std::stoul(require_value("--epochs")));
+            continue;
+        }
+        if (arg == "--seed")
+        {
+            options.seed = static_cast<std::uint64_t>(std::stoull(require_value("--seed")));
+            continue;
+        }
+        if (arg == "--help" || arg == "-h")
+        {
+            print_usage(argv[0]);
+            std::exit(0);
+        }
+
+        throw std::invalid_argument("Unknown argument: " + arg);
+    }
+
+    if (options.rank < 0)
+    {
+        throw std::invalid_argument("--rank must be non-negative.");
+    }
+    if (options.world_size <= 0)
+    {
+        throw std::invalid_argument("--world-size must be positive.");
+    }
+    if (options.rank >= options.world_size)
+    {
+        throw std::invalid_argument("--rank must be less than --world-size.");
+    }
+    if (options.batch_size == 0)
+    {
+        throw std::invalid_argument("--batch-size must be positive.");
+    }
+
+    return options;
+}
 
 Matrix softmax(Matrix &logits)
 {
@@ -106,7 +220,8 @@ Matrix one_hot_encode(int label, int d)
 // class labels is row vector
 std::pair<Matrix, Matrix> get_random_batch(const Matrix &x_full,
                                            const Matrix &class_labels, // shape: (1, total_samples)
-                                           int batch_size)
+                                           int batch_size,
+                                           std::mt19937 &g)
 {
     if (batch_size <= 0)
     {
@@ -130,8 +245,6 @@ std::pair<Matrix, Matrix> get_random_batch(const Matrix &x_full,
     std::vector<int> indices(total_samples);
     std::iota(indices.begin(), indices.end(), 0);
 
-    std::random_device rd;
-    std::mt19937 g(rd());
     std::shuffle(indices.begin(), indices.end(), g);
 
     Matrix x_batch(batch_size, x_full.numCols());
@@ -150,8 +263,10 @@ std::pair<Matrix, Matrix> get_random_batch(const Matrix &x_full,
     return {x_batch, y_batch};
 }
 
-int main()
+int main(int argc, char **argv)
 {
+    const ProgramOptions options = parse_program_options(argc, argv);
+
     using math::ASTNode;
     using math::Differentiator;
     using math::GD;
@@ -194,8 +309,7 @@ int main()
         total_rows++;
     }
 
-    std::random_device rd;
-    std::mt19937 gen(rd());
+    std::mt19937 gen(static_cast<std::mt19937::result_type>(options.seed));
     std::uniform_int_distribution<size_t> dist(0, total_rows - 1);
 
     std::unordered_set<size_t> selected_indices;
@@ -452,22 +566,65 @@ int main()
     nn_model.add_layer(std::make_shared<ml::LinearLayer>(32, 32));
     nn_model.add_layer(std::make_shared<ml::ReLULayer>());
     nn_model.add_layer(std::make_shared<ml::LinearLayer>(32, 3));
-    ml::NN_SGD optimizer(nn_model.parameters(), 0.01, 64);
-
-    for (size_t i = 0; i < 1000; ++i)
+    if (options.distributed)
     {
-        optimizer.zero_grad();
-        auto [data, labels] = get_random_batch(xTr, yTr, 64);
-        const std::vector<Matrix> data_points = get_data_points(data);
-        ml::parallel_backpropagate_batch(
-            nn_model,
-            data_points,
-            [&](ml::Sequential &local_model, const Matrix &p, std::size_t labels_idx)
-            {
-                Matrix logits = local_model.forward(p);
-                local_model.backward(softmax(logits) - one_hot_encode(labels(0, labels_idx), 3));
-            });
-        optimizer.step();
+        if (options.batch_size % static_cast<std::size_t>(options.world_size) != 0)
+        {
+            throw std::invalid_argument("--batch-size must be divisible by --world-size in distributed mode.");
+        }
+
+        const std::size_t local_batch_size = options.batch_size / static_cast<std::size_t>(options.world_size);
+        auto [local_xTr, local_yTr] = ctorch::distributed::equal_row_shard(xTr, yTr, options.rank, options.world_size);
+        if (local_batch_size == 0)
+        {
+            throw std::invalid_argument("Distributed local batch size must be positive.");
+        }
+        if (local_batch_size > local_xTr.numRows())
+        {
+            throw std::invalid_argument("Distributed local batch size exceeds the rank's data shard.");
+        }
+
+        std::mt19937 batch_gen(static_cast<std::mt19937::result_type>(options.seed + static_cast<std::uint64_t>(options.rank)));
+        ctorch::distributed::TcpProcessGroup group(options.master_address, options.master_port, options.rank, options.world_size);
+        ctorch::distributed::synchronize_sequential_model(group, nn_model);
+
+        ml::NN_SGD optimizer(nn_model.parameters(), 0.01f, local_batch_size);
+        for (std::size_t i = 0; i < options.epochs; ++i)
+        {
+            auto [data, labels] = get_random_batch(local_xTr, local_yTr, static_cast<int>(local_batch_size), batch_gen);
+            const std::vector<Matrix> data_points = get_data_points(data);
+            ctorch::distributed::distributed_parallel_backpropagate_batch(
+                group,
+                nn_model,
+                optimizer,
+                data_points,
+                [&](ml::Sequential &local_model, const Matrix &p, std::size_t labels_idx)
+                {
+                    Matrix logits = local_model.forward(p);
+                    local_model.backward(softmax(logits) - one_hot_encode(labels(0, labels_idx), 3));
+                });
+        }
+    }
+    else
+    {
+        std::mt19937 batch_gen(static_cast<std::mt19937::result_type>(options.seed));
+        ml::NN_SGD optimizer(nn_model.parameters(), 0.01f, options.batch_size);
+
+        for (std::size_t i = 0; i < options.epochs; ++i)
+        {
+            optimizer.zero_grad();
+            auto [data, labels] = get_random_batch(xTr, yTr, static_cast<int>(options.batch_size), batch_gen);
+            const std::vector<Matrix> data_points = get_data_points(data);
+            ml::parallel_backpropagate_batch(
+                nn_model,
+                data_points,
+                [&](ml::Sequential &local_model, const Matrix &p, std::size_t labels_idx)
+                {
+                    Matrix logits = local_model.forward(p);
+                    local_model.backward(softmax(logits) - one_hot_encode(labels(0, labels_idx), 3));
+                });
+            optimizer.step();
+        }
     }
 
     float num_correct = 0.0f;

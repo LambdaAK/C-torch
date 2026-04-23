@@ -1,8 +1,11 @@
 # Classification experiment — also buildable via CMake from repo root:
 #   cmake -B build && cmake --build build --target classification
+# Example distributed run:
+#   make run ARGS="--distributed --rank 0 --world-size 2 --master-port 29500"
 
 CXX = g++
-CXXFLAGS = -std=c++17 -O3 -Wall -Wextra -pthread -I../../lib -I../recommender
+CXXFLAGS = -std=c++20 -O3 -Wall -Wextra -pthread -I../../lib -I../recommender
+ARGS ?=
 
 SRC_DIR = .
 MATH_DIR = ../../lib/math
@@ -30,7 +33,10 @@ all: $(TARGET)
 $(TARGET): $(SOURCES)
 	$(CXX) $(CXXFLAGS) -o $@ $(SOURCES)
 
+run: $(TARGET)
+	./$(TARGET) $(ARGS)
+
 clean:
 	rm -f $(TARGET)
 
-.PHONY: all clean
+.PHONY: all run clean

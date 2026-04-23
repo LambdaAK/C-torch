@@ -322,6 +322,16 @@ g++ -std=c++20 -O3 -I../../lib ttt_main.cpp tictactoe.cpp replaymemory.cpp dqn.c
   - KNN
   - Linear regression scoring variant
   - Feedforward NN classifier
+- The NN classifier also supports synchronous distributed training with:
+  - `--distributed`
+  - `--rank <n>`
+  - `--world-size <n>`
+  - `--master-addr <addr>`
+  - `--master-port <port>`
+  - `--batch-size <n>` as the global batch size, which must be divisible by `--world-size`
+- Example two-rank run:
+  - `./build/classification --distributed --rank 0 --world-size 2 --master-addr 127.0.0.1 --master-port 29500`
+  - `./build/classification --distributed --rank 1 --world-size 2 --master-addr 127.0.0.1 --master-port 29500`
 
 ### Recommender (`experiments/recommender`)
 
