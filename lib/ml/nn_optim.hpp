@@ -79,6 +79,14 @@ namespace ml
         void zero_grad();
 
         /**
+         * @brief Returns the batch size used for gradient scaling.
+         */
+        size_t get_batch_size() const
+        {
+            return batch_size;
+        }
+
+        /**
          * @brief Applies one optimization step to tracked parameters.
          */
         void step();

@@ -17,9 +17,11 @@
 #include <vector>
 
 #include "distributed/distributed_sync.hpp"
+#include "distributed/distributed_training.hpp"
 #include "distributed/tcp_process_group.hpp"
 #include "math/matrix.hpp"
 #include "ml/nn.hpp"
+#include "ml/nn_optim.hpp"
 
 namespace
 {
@@ -180,6 +182,32 @@ TEST(Distributed, SequentialArchitectureSignatureIsStable)
     EXPECT_NE(reference.architecture_signature(), mismatched.architecture_signature());
 }
 
+TEST(Distributed, EqualRowShardSplitsMatricesEvenly)
+{
+    Matrix x(6, 2);
+    Matrix y(1, 6);
+
+    for (std::size_t row = 0; row < x.numRows(); ++row)
+    {
+        x(row, 0) = static_cast<double>(row);
+        x(row, 1) = static_cast<double>(row + 10);
+        y(0, row) = static_cast<double>(row + 100);
+    }
+
+    const auto [x_shard, y_shard] = ctorch::distributed::equal_row_shard(x, y, 1, 3);
+
+    ASSERT_EQ(x_shard.numRows(), 2u);
+    ASSERT_EQ(x_shard.numCols(), 2u);
+    ASSERT_EQ(y_shard.numRows(), 1u);
+    ASSERT_EQ(y_shard.numCols(), 2u);
+    EXPECT_DOUBLE_EQ(x_shard(0, 0), 2.0);
+    EXPECT_DOUBLE_EQ(x_shard(0, 1), 12.0);
+    EXPECT_DOUBLE_EQ(x_shard(1, 0), 3.0);
+    EXPECT_DOUBLE_EQ(x_shard(1, 1), 13.0);
+    EXPECT_DOUBLE_EQ(y_shard(0, 0), 102.0);
+    EXPECT_DOUBLE_EQ(y_shard(0, 1), 103.0);
+}
+
 TEST(Distributed, TcpProcessGroupSynchronizesAndAllReduces)
 {
     const std::uint16_t port = reserve_port();
@@ -259,6 +287,122 @@ TEST(Distributed, TcpProcessGroupSynchronizesAndAllReduces)
 
     EXPECT_TRUE(matrices_match(root_result.reduced, Matrix({{4.0, 6.0}})));
     EXPECT_TRUE(matrices_match(peer_result.reduced, Matrix({{4.0, 6.0}})));
+}
+
+TEST(Distributed, DistributedParallelBackpropMatchesSerialUpdate)
+{
+    const std::uint16_t port = reserve_port();
+    const std::vector<Matrix> samples = {
+        Matrix({{1.0}, {0.0}}),
+        Matrix({{0.5}, {1.0}}),
+        Matrix({{-1.0}, {0.25}}),
+        Matrix({{0.0}, {0.75}})
+    };
+
+    const std::vector<Matrix> upstreams = {
+        Matrix({{1.0}}),
+        Matrix({{-0.5}}),
+        Matrix({{0.25}}),
+        Matrix({{2.0}})
+    };
+
+    ml::Sequential serial = make_reference_model();
+    ml::NN_SGD serial_optimizer(serial.parameters(), 0.1f, samples.size());
+    serial_optimizer.zero_grad();
+    for (std::size_t index = 0; index < samples.size(); ++index)
+    {
+        serial.forward(samples[index]);
+        serial.backward(upstreams[index]);
+    }
+    serial_optimizer.step();
+    const std::vector<Matrix> serial_snapshot = snapshot_parameters(serial);
+
+    std::promise<WorkerResult> root_promise;
+    std::promise<WorkerResult> peer_promise;
+    std::future<WorkerResult> root_future = root_promise.get_future();
+    std::future<WorkerResult> peer_future = peer_promise.get_future();
+
+    std::thread root_thread([&]() {
+        try
+        {
+            ml::Sequential model = make_reference_model();
+            ctorch::distributed::TcpProcessGroup group("127.0.0.1", port, 0, 2);
+            ctorch::distributed::synchronize_sequential_model(group, model);
+
+            std::vector<Matrix> local_samples(samples.begin(), samples.begin() + 2);
+            std::vector<Matrix> local_upstreams(upstreams.begin(), upstreams.begin() + 2);
+            ml::NN_SGD optimizer(model.parameters(), 0.1f, local_samples.size());
+            ctorch::distributed::distributed_parallel_backpropagate_batch(
+                group,
+                model,
+                optimizer,
+                local_samples,
+                [&](ml::Sequential &local_model, const Matrix &sample, std::size_t sample_index)
+                {
+                    Matrix logits = local_model.forward(sample);
+                    local_model.backward(local_upstreams[sample_index]);
+                    (void)logits;
+                });
+
+            WorkerResult result;
+            result.parameters = snapshot_parameters(model);
+            root_promise.set_value(std::move(result));
+        }
+        catch (...)
+        {
+            root_promise.set_exception(std::current_exception());
+        }
+    });
+
+    std::thread peer_thread([&]() {
+        try
+        {
+            auto sleep_fn = []() {
+                std::this_thread::sleep_for(std::chrono::milliseconds(20));
+            };
+            ml::Sequential model = make_peer_model();
+            std::unique_ptr<ctorch::distributed::TcpProcessGroup> group =
+                connect_with_retry("127.0.0.1", port, 1, 2, sleep_fn);
+            ctorch::distributed::synchronize_sequential_model(*group, model);
+
+            std::vector<Matrix> local_samples(samples.begin() + 2, samples.end());
+            std::vector<Matrix> local_upstreams(upstreams.begin() + 2, upstreams.end());
+            ml::NN_SGD optimizer(model.parameters(), 0.1f, local_samples.size());
+            ctorch::distributed::distributed_parallel_backpropagate_batch(
+                *group,
+                model,
+                optimizer,
+                local_samples,
+                [&](ml::Sequential &local_model, const Matrix &sample, std::size_t sample_index)
+                {
+                    Matrix logits = local_model.forward(sample);
+                    local_model.backward(local_upstreams[sample_index]);
+                    (void)logits;
+                });
+
+            WorkerResult result;
+            result.parameters = snapshot_parameters(model);
+            peer_promise.set_value(std::move(result));
+        }
+        catch (...)
+        {
+            peer_promise.set_exception(std::current_exception());
+        }
+    });
+
+    root_thread.join();
+    peer_thread.join();
+
+    const WorkerResult root_result = root_future.get();
+    const WorkerResult peer_result = peer_future.get();
+
+    ASSERT_EQ(root_result.parameters.size(), serial_snapshot.size());
+    ASSERT_EQ(peer_result.parameters.size(), serial_snapshot.size());
+    for (std::size_t index = 0; index < serial_snapshot.size(); ++index)
+    {
+        EXPECT_TRUE(matrices_match(root_result.parameters[index], serial_snapshot[index]));
+        EXPECT_TRUE(matrices_match(peer_result.parameters[index], serial_snapshot[index]));
+    }
 }
 
 TEST(Distributed, SynchronizeSequentialModelRejectsMismatchedArchitecture)
