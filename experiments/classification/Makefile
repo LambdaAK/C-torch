@@ -10,6 +10,7 @@ ARGS ?=
 SRC_DIR = .
 MATH_DIR = ../../lib/math
 ML_DIR = ../../lib/ml
+DIST_DIR = ../../lib/distributed
 
 SOURCES = \
 	$(SRC_DIR)/main.cpp \
@@ -24,6 +25,7 @@ SOURCES = \
 	$(ML_DIR)/nn_optim.cpp \
 	$(ML_DIR)/randomfouriersvm.cpp \
 	$(ML_DIR)/kernelsvm.cpp \
+	$(DIST_DIR)/tcp_process_group.cpp \
 	$(ML_DIR)/gaussian_nb.cpp
 
 TARGET = main
