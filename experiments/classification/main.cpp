@@ -28,6 +28,7 @@
 #include "ml/kernelsvm.hpp"
 #include "math/dataaugmentor.hpp"
 #include "distributed/distributed_sync.hpp"
+#include "distributed/distributed_checkpoint.hpp"
 #include "distributed/distributed_training.hpp"
 #include "distributed/tcp_process_group.hpp"
 #include "ml/randomfouriersvm.hpp"
@@ -52,6 +53,8 @@ struct ProgramOptions
     std::size_t epochs = 1000;
     std::size_t batch_size = 64;
     std::uint64_t seed = 1337;
+    std::string checkpoint_prefix;
+    bool resume_checkpoint = false;
 };
 
 void print_usage(const char *program_name)
@@ -64,7 +67,9 @@ void print_usage(const char *program_name)
               << "  --master-port <port>    TCP master port (default: 29500)\n"
               << "  --batch-size <n>        Global batch size for NN training (default: 64)\n"
               << "  --epochs <n>            NN training iterations (default: 1000)\n"
-              << "  --seed <n>              Deterministic RNG seed (default: 1337)\n";
+              << "  --seed <n>              Deterministic RNG seed (default: 1337)\n"
+              << "  --checkpoint-prefix <p> Checkpoint file prefix (saves <p>.model and <p>.optim)\n"
+              << "  --resume-checkpoint     Resume from the checkpoint prefix before training\n";
 }
 
 ProgramOptions parse_program_options(int argc, char **argv)
@@ -123,6 +128,16 @@ ProgramOptions parse_program_options(int argc, char **argv)
             options.seed = static_cast<std::uint64_t>(std::stoull(require_value("--seed")));
             continue;
         }
+        if (arg == "--checkpoint-prefix")
+        {
+            options.checkpoint_prefix = require_value("--checkpoint-prefix");
+            continue;
+        }
+        if (arg == "--resume-checkpoint")
+        {
+            options.resume_checkpoint = true;
+            continue;
+        }
         if (arg == "--help" || arg == "-h")
         {
             print_usage(argv[0]);
@@ -147,6 +162,10 @@ ProgramOptions parse_program_options(int argc, char **argv)
     if (options.batch_size == 0)
     {
         throw std::invalid_argument("--batch-size must be positive.");
+    }
+    if (options.resume_checkpoint && options.checkpoint_prefix.empty())
+    {
+        throw std::invalid_argument("--resume-checkpoint requires --checkpoint-prefix.");
     }
 
     return options;
@@ -586,9 +605,17 @@ int main(int argc, char **argv)
 
         std::mt19937 batch_gen(static_cast<std::mt19937::result_type>(options.seed + static_cast<std::uint64_t>(options.rank)));
         ctorch::distributed::TcpProcessGroup group(options.master_address, options.master_port, options.rank, options.world_size);
-        ctorch::distributed::synchronize_sequential_model(group, nn_model);
 
         ml::NN_SGD optimizer(nn_model.parameters(), 0.01f, local_batch_size);
+        if (options.resume_checkpoint)
+        {
+            ctorch::distributed::load_distributed_checkpoint(group, options.checkpoint_prefix, nn_model, optimizer);
+        }
+        else
+        {
+            ctorch::distributed::synchronize_sequential_model(group, nn_model);
+        }
+
         for (std::size_t i = 0; i < options.epochs; ++i)
         {
             auto [data, labels] = get_random_batch(local_xTr, local_yTr, static_cast<int>(local_batch_size), batch_gen);
@@ -604,11 +631,28 @@ int main(int argc, char **argv)
                     local_model.backward(softmax(logits) - one_hot_encode(labels(0, labels_idx), 3));
                 });
         }
+
+        if (!options.checkpoint_prefix.empty())
+        {
+            ctorch::distributed::save_distributed_checkpoint(group, options.checkpoint_prefix, nn_model, optimizer);
+        }
     }
     else
     {
         std::mt19937 batch_gen(static_cast<std::mt19937::result_type>(options.seed));
         ml::NN_SGD optimizer(nn_model.parameters(), 0.01f, options.batch_size);
+
+        if (options.resume_checkpoint)
+        {
+            if (!nn_model.load(options.checkpoint_prefix + ".model"))
+            {
+                throw std::runtime_error("Failed to load classification checkpoint model.");
+            }
+            if (!optimizer.load_state(options.checkpoint_prefix + ".optim"))
+            {
+                throw std::runtime_error("Failed to load classification checkpoint optimizer.");
+            }
+        }
 
         for (std::size_t i = 0; i < options.epochs; ++i)
         {
@@ -622,8 +666,20 @@ int main(int argc, char **argv)
                 {
                     Matrix logits = local_model.forward(p);
                     local_model.backward(softmax(logits) - one_hot_encode(labels(0, labels_idx), 3));
-                });
+            });
             optimizer.step();
+        }
+
+        if (!options.checkpoint_prefix.empty())
+        {
+            if (!nn_model.save(options.checkpoint_prefix + ".model"))
+            {
+                throw std::runtime_error("Failed to save classification checkpoint model.");
+            }
+            if (!optimizer.save_state(options.checkpoint_prefix + ".optim"))
+            {
+                throw std::runtime_error("Failed to save classification checkpoint optimizer.");
+            }
         }
     }
 

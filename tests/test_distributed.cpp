@@ -2,6 +2,7 @@
 
 #include <arpa/inet.h>
 #include <cmath>
+#include <filesystem>
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <unistd.h>
@@ -17,6 +18,7 @@
 #include <vector>
 
 #include "distributed/distributed_sync.hpp"
+#include "distributed/distributed_checkpoint.hpp"
 #include "distributed/distributed_training.hpp"
 #include "distributed/tcp_process_group.hpp"
 #include "math/matrix.hpp"
@@ -118,6 +120,29 @@ std::vector<Matrix> snapshot_parameters(const ml::Sequential &model)
     }
 
     return snapshot;
+}
+
+void assign_gradients(ml::Sequential &model, const std::vector<Matrix> &gradients)
+{
+    auto params = model.parameters();
+    if (params.size() != gradients.size())
+    {
+        throw std::runtime_error("Gradient layout mismatch while assigning test gradients.");
+    }
+
+    for (std::size_t index = 0; index < params.size(); ++index)
+    {
+        if (!params[index].second)
+        {
+            throw std::runtime_error("Encountered a null gradient buffer while assigning test gradients.");
+        }
+        if (params[index].second->numRows() != gradients[index].numRows() ||
+            params[index].second->numCols() != gradients[index].numCols())
+        {
+            throw std::runtime_error("Gradient shape mismatch while assigning test gradients.");
+        }
+        *params[index].second = gradients[index];
+    }
 }
 
 bool matrices_match(const Matrix &lhs, const Matrix &rhs)
@@ -403,6 +428,62 @@ TEST(Distributed, DistributedParallelBackpropMatchesSerialUpdate)
         EXPECT_TRUE(matrices_match(root_result.parameters[index], serial_snapshot[index]));
         EXPECT_TRUE(matrices_match(peer_result.parameters[index], serial_snapshot[index]));
     }
+}
+
+TEST(Distributed, OptimizerCheckpointRoundTripPreservesFutureSteps)
+{
+    const std::string prefix = "distributed_checkpoint_roundtrip_test";
+
+    std::vector<Matrix> first_gradients = {
+        Matrix({{1.0, -0.5}, {0.25, 0.75}, {-0.25, 0.5}}),
+        Matrix({{0.1}, {-0.2}, {0.05}}),
+        Matrix({{0.6, -0.4, 0.2}}),
+        Matrix({{0.15}})
+    };
+    std::vector<Matrix> second_gradients = {
+        Matrix({{0.5, 0.25}, {-0.75, 0.1}, {0.0, -0.3}}),
+        Matrix({{0.2}, {0.4}, {-0.1}}),
+        Matrix({{-0.3, 0.7, -0.2}}),
+        Matrix({{-0.05}})
+    };
+    std::vector<Matrix> third_gradients = {
+        Matrix({{-0.4, 0.3}, {0.6, -0.2}, {0.15, 0.45}}),
+        Matrix({{0.05}, {0.1}, {-0.2}}),
+        Matrix({{0.25, -0.15, 0.35}}),
+        Matrix({{0.08}})
+    };
+
+    ml::Sequential saved = make_reference_model();
+    ml::Sequential restored = make_reference_model();
+    ml::NN_SGD saved_optimizer(saved.parameters(), 0.1f, 4);
+    ml::NN_SGD restored_optimizer(restored.parameters(), 0.1f, 4);
+
+    assign_gradients(saved, first_gradients);
+    saved_optimizer.step();
+    assign_gradients(saved, second_gradients);
+    saved_optimizer.step();
+
+    ASSERT_TRUE(saved.save(prefix + ".model"));
+    ASSERT_TRUE(saved_optimizer.save_state(prefix + ".optim"));
+
+    ASSERT_TRUE(restored.load(prefix + ".model"));
+    ASSERT_TRUE(restored_optimizer.load_state(prefix + ".optim"));
+
+    assign_gradients(saved, third_gradients);
+    assign_gradients(restored, third_gradients);
+    saved_optimizer.step();
+    restored_optimizer.step();
+
+    const std::vector<Matrix> saved_snapshot = snapshot_parameters(saved);
+    const std::vector<Matrix> restored_snapshot = snapshot_parameters(restored);
+    ASSERT_EQ(saved_snapshot.size(), restored_snapshot.size());
+    for (std::size_t index = 0; index < saved_snapshot.size(); ++index)
+    {
+        EXPECT_TRUE(matrices_match(saved_snapshot[index], restored_snapshot[index]));
+    }
+
+    std::filesystem::remove(prefix + ".model");
+    std::filesystem::remove(prefix + ".optim");
 }
 
 TEST(Distributed, SynchronizeSequentialModelRejectsMismatchedArchitecture)

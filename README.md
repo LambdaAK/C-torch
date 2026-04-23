@@ -329,6 +329,8 @@ g++ -std=c++20 -O3 -I../../lib ttt_main.cpp tictactoe.cpp replaymemory.cpp dqn.c
   - `--master-addr <addr>`
   - `--master-port <port>`
   - `--batch-size <n>` as the global batch size, which must be divisible by `--world-size`
+  - `--checkpoint-prefix <path>` to save `path.model` and `path.optim`
+  - `--resume-checkpoint` to load the checkpoint prefix before training and rebroadcast it to every rank
 - Example two-rank run:
   - `./build/classification --distributed --rank 0 --world-size 2 --master-addr 127.0.0.1 --master-port 29500`
   - `./build/classification --distributed --rank 1 --world-size 2 --master-addr 127.0.0.1 --master-port 29500`

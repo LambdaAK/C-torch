@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -77,6 +78,26 @@ namespace ml
          * @brief Clears gradient buffers for all tracked parameters.
          */
         void zero_grad();
+
+        /**
+         * @brief Serializes optimizer state to an in-memory binary blob.
+         */
+        std::string serialize_state() const;
+
+        /**
+         * @brief Restores optimizer state from an in-memory binary blob.
+         */
+        void deserialize_state(const std::string &blob);
+
+        /**
+         * @brief Saves optimizer state to disk.
+         */
+        bool save_state(const std::string &filepath) const;
+
+        /**
+         * @brief Loads optimizer state from disk.
+         */
+        bool load_state(const std::string &filepath);
 
         /**
          * @brief Returns the batch size used for gradient scaling.
