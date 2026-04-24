@@ -81,6 +81,15 @@ make py FILE=examples/python/train_logistic_xor_distributed.py ARGS="--rank 1 --
 
 It uses one hand-built cross feature (`x0 * x1`) and ADAM so the linear model can fit the XOR-like labels.
 
+For a minimal distributed kernel SVM demo on two concentric circles:
+
+```bash
+make py FILE=examples/python/train_kernel_svm_circles_distributed.py
+bash scripts/run_kernel_svm_circles_5nodes.sh
+```
+
+This uses the distributed random-Fourier approximation so the 1000-point problem stays practical.
+
 Classical models also expose clean distributed classmethods:
 
 ```python

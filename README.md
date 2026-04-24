@@ -300,6 +300,15 @@ make py FILE=examples/python/train_logistic_xor_distributed.py ARGS="--rank 1 --
 
 The example adds one cross-term feature (`x0 * x1`) and uses ADAM so the linear model can fit the XOR-like labels.
 
+Distributed Python kernel SVM example on concentric circles:
+
+```bash
+make py FILE=examples/python/train_kernel_svm_circles_distributed.py
+bash scripts/run_kernel_svm_circles_5nodes.sh
+```
+
+This uses the distributed random-Fourier approximation so the 1000-point problem stays practical.
+
 Distributed C++ logistic regression demo:
 
 ```bash
