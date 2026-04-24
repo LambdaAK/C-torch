@@ -71,6 +71,16 @@ make py FILE=examples/python/train_nn_regression.py ARGS="--distributed --rank 1
 Add `--checkpoint-prefix artifacts/py_models/nonlinear_regression` to save distributed checkpoints, and `--resume-checkpoint` to reload them.
 Start rank `0` first so the TCP master is listening before the other rank connects.
 
+For a minimal distributed logistic-regression example on XOR-like data:
+
+```bash
+make py FILE=examples/python/train_logistic_xor_distributed.py
+make py FILE=examples/python/train_logistic_xor_distributed.py ARGS="--rank 0 --world-size 2"
+make py FILE=examples/python/train_logistic_xor_distributed.py ARGS="--rank 1 --world-size 2"
+```
+
+It uses one hand-built cross feature (`x0 * x1`) and ADAM so the linear model can fit the XOR-like labels.
+
 Classical models also expose clean distributed classmethods:
 
 ```python

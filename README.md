@@ -290,6 +290,16 @@ make py FILE=examples/python/train_nn_regression.py ARGS="--distributed --rank 1
 
 Add `--checkpoint-prefix artifacts/py_models/nonlinear_regression` and `--resume-checkpoint` to save and reload distributed state.
 
+Distributed Python logistic-regression example on XOR-like data:
+
+```bash
+make py FILE=examples/python/train_logistic_xor_distributed.py
+make py FILE=examples/python/train_logistic_xor_distributed.py ARGS="--rank 0 --world-size 2"
+make py FILE=examples/python/train_logistic_xor_distributed.py ARGS="--rank 1 --world-size 2"
+```
+
+The example adds one cross-term feature (`x0 * x1`) and uses ADAM so the linear model can fit the XOR-like labels.
+
 Distributed C++ logistic regression demo:
 
 ```bash
