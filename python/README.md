@@ -53,6 +53,14 @@ make py FILE=examples/python/train_nn_regression.py
 python3 examples/python/train_nn_regression.py infer --model-path artifacts/py_models/nonlinear_regression.model --x0 0.25 --x1 -0.75
 ```
 
+For a simple XOR-style distributed classification demo:
+
+```bash
+make py FILE=examples/python/train_xor_distributed.py
+make py FILE=examples/python/train_xor_distributed.py ARGS="--distributed --rank 0 --world-size 2"
+make py FILE=examples/python/train_xor_distributed.py ARGS="--distributed --rank 1 --world-size 2"
+```
+
 Distributed mode:
 
 ```bash
