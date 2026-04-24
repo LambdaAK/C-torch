@@ -3,6 +3,11 @@
 
 using math::ASTNode;
 
+namespace ctorch::distributed
+{
+    class ProcessGroup;
+}
+
 namespace ml
 {
     /**
@@ -15,6 +20,8 @@ namespace ml
     class LinearRegression
     {
     private:
+        LinearRegression() = default;
+
         Matrix xTr;                    ///< Cached training features.
         std::vector<Matrix> xTr_rows;  ///< Row-wise view of `xTr` for loss construction.
         Matrix yTr;                    ///< Cached training labels.
@@ -46,6 +53,16 @@ namespace ml
          * @param max_iter Number of gradient descent iterations.
          */
         LinearRegression(Matrix xTr, Matrix yTr, double learning_rate, int max_iter);
+
+        /**
+         * @brief Trains a linear regression model with synchronous distributed gradient averaging.
+         */
+        static LinearRegression train_distributed(
+            Matrix xTr,
+            Matrix yTr,
+            double learning_rate,
+            int max_iter,
+            ctorch::distributed::ProcessGroup &group);
 
         /**
          * @brief Predicts a continuous target for one sample.

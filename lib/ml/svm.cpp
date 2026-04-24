@@ -1,14 +1,119 @@
 #include "svm.hpp"
 
+#include "distributed/distributed_optimizer.hpp"
 #include "math/dataaugmentor.hpp"
+#include "math/ast.hpp"
+#include "math/optim.hpp"
 #include "math/optim_qp.hpp"
 
 #include <cmath>
 #include <stdexcept>
 #include <vector>
 
+using math::ASTNode;
+using math::Max;
+using math::Num;
+using math::Var;
+
+namespace
+{
+class LinearSVMHingeLossFunction final : public LossFunction
+{
+private:
+    std::size_t feature_count_;
+    double c_value_;
+
+public:
+    LinearSVMHingeLossFunction(std::size_t feature_count, double c_value)
+        : feature_count_(feature_count), c_value_(c_value)
+    {
+    }
+
+    std::shared_ptr<math::ASTNode> sample_loss(const Matrix &x, double y) const override
+    {
+        std::shared_ptr<ASTNode> score = Num(0);
+        for (std::size_t i = 0; i < feature_count_; ++i)
+        {
+            score = score + Var("w" + std::to_string(i)) * Num(x.at(0, i));
+        }
+        score = score + Var("b");
+        return Num(c_value_) * Max(Num(0), Num(1) - Num(y) * score);
+    }
+
+    std::shared_ptr<math::ASTNode> regularizer() const override
+    {
+        std::shared_ptr<ASTNode> reg = Num(0);
+        for (std::size_t i = 0; i < feature_count_; ++i)
+        {
+            std::shared_ptr<ASTNode> w_i = Var("w" + std::to_string(i));
+            reg = reg + (w_i ^ Num(2));
+        }
+        return Num(0.5) * reg;
+    }
+};
+} // namespace
+
 namespace ml
 {
+    SVM SVM::train_distributed(
+        Matrix xTr,
+        Matrix yTr,
+        double learning_rate,
+        int max_iter,
+        double C,
+        DataAugmentationType augmentation_type,
+        ctorch::distributed::ProcessGroup &group)
+    {
+        if (xTr.numRows() != yTr.numCols())
+        {
+            throw std::invalid_argument("Number of training samples and labels must be equal.");
+        }
+
+        if (yTr.numRows() != 1)
+        {
+            throw std::invalid_argument("Labels must be a row vector.");
+        }
+
+        if (C <= 0)
+        {
+            throw std::invalid_argument("C must be positive.");
+        }
+
+        if (max_iter <= 0)
+        {
+            throw std::invalid_argument("max_iter must be positive.");
+        }
+
+        xTr = DataAugmentor::augment_data(xTr, augmentation_type);
+
+        SVM model;
+        model.xTr = xTr;
+        model.yTr = yTr;
+        model.augmentation_type = augmentation_type;
+        model.weights = Matrix(1, xTr.numCols());
+        model.bias = 0.0;
+
+        std::shared_ptr<LossFunction> loss_function = std::make_shared<LinearSVMHingeLossFunction>(xTr.numCols(), C);
+
+        std::unordered_map<std::string, double> values;
+        for (std::size_t i = 0; i < xTr.numCols(); ++i)
+        {
+            values["w" + std::to_string(i)] = 0.0;
+        }
+        values["b"] = 0.0;
+
+        math::OptimParams optim_params(math::OptimType::GD, learning_rate, max_iter);
+        ctorch::distributed::DistributedOptimizer optimizer(group, optim_params);
+        std::unordered_map<std::string, double> result = optimizer.optimize(loss_function, model.xTr, model.yTr, values);
+
+        for (std::size_t i = 0; i < xTr.numCols(); ++i)
+        {
+            model.weights(0, i) = result["w" + std::to_string(i)];
+        }
+        model.bias = result["b"];
+        return model;
+    }
+
     SVM::SVM()
     {
         // default constructor

@@ -111,6 +111,17 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
     target_compile_options(distributed_logistic_demo PRIVATE -Wall -Wextra)
 endif()
 
+add_executable(distributed_classical_models
+    examples/distributed/distributed_classical_models.cpp
+)
+target_include_directories(distributed_classical_models PRIVATE
+    ${CMAKE_SOURCE_DIR}/lib
+)
+target_link_libraries(distributed_classical_models PRIVATE ctorch)
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
+    target_compile_options(distributed_classical_models PRIVATE -Wall -Wextra)
+endif()
+
 add_subdirectory(demos)
 
 option(CTORCH_BUILD_TESTS "Build GoogleTest unit tests (downloads googletest)" ON)

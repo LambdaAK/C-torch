@@ -297,6 +297,31 @@ Distributed C++ logistic regression demo:
 ./build/distributed_logistic_demo --rank 1 --world-size 2
 ```
 
+Distributed classical-model demo:
+
+```bash
+./build/distributed_classical_models --rank 0 --world-size 2
+./build/distributed_classical_models --rank 1 --world-size 2
+```
+
+Python distributed training for classical models is also available through classmethods:
+
+```python
+from ctorch import LogisticRegression, OptimType, TcpProcessGroup
+
+group = TcpProcessGroup("127.0.0.1", 29500, rank=0, world_size=2)
+model = LogisticRegression.train_distributed(
+    x_train,
+    y_train,
+    optim_type=OptimType.GD,
+    learning_rate=0.05,
+    max_iter=1000,
+    group=group,
+)
+```
+
+The distributed SVM path uses the soft-margin primal objective with gradient descent. The serial SVM constructor still uses the quadratic-program dual solver.
+
 Start rank `0` first for both distributed examples so the TCP master is listening before the other rank connects.
 
 More package notes: [`python/README.md`](python/README.md).

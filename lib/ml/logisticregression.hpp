@@ -5,6 +5,11 @@
 
 using math::ASTNode;
 
+namespace ctorch::distributed
+{
+    class ProcessGroup;
+}
+
 namespace ml {
     /**
      * @brief Binary logistic regression classifier.
@@ -16,6 +21,8 @@ namespace ml {
      */
     class LogisticRegression {
         private:
+            LogisticRegression() = default;
+
             Matrix xTr;                         ///< Cached (possibly augmented) training features.
             Matrix yTr;                         ///< Cached training labels.
             std::vector<Matrix> xTr_rows;       ///< Row-wise cache of `xTr`.
@@ -29,7 +36,7 @@ namespace ml {
              * @param y Binary label for the sample.
              * @return AST for binary cross-entropy sample loss.
              */
-            std::shared_ptr<ASTNode> single_loss(const Matrix &x, int y) const;
+            std::shared_ptr<ASTNode> single_loss(const Matrix &x, double y) const;
 
             /**
              * @brief Builds mean logistic loss over all cached training samples.
@@ -48,6 +55,16 @@ namespace ml {
              * @param data_augmentation_type Optional feature expansion strategy.
              */
             LogisticRegression(Matrix xTr, Matrix yTr, math::OptimParams optim_params, DataAugmentationType data_augmentation_type = DataAugmentationType::NO_OP);
+
+            /**
+             * @brief Trains a logistic regression model with synchronous distributed gradient averaging.
+             */
+            static LogisticRegression train_distributed(
+                Matrix xTr,
+                Matrix yTr,
+                math::OptimParams optim_params,
+                DataAugmentationType data_augmentation_type,
+                ctorch::distributed::ProcessGroup &group);
 
             /**
              * @brief Predicts the binary class for one sample.

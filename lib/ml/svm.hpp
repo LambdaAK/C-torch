@@ -2,6 +2,11 @@
 #include "math/matrix.hpp"
 #include "math/dataaugmentor.hpp"
 
+namespace ctorch::distributed
+{
+    class ProcessGroup;
+}
+
 namespace ml {
     /**
      * @brief Binary linear support vector machine classifier.
@@ -36,6 +41,18 @@ namespace ml {
              * @param augmentation_type Feature augmentation mode.
              */
             SVM(Matrix xTr, Matrix yTr, double learning_rate, int max_iter, double C, DataAugmentationType augmentation_type);
+
+            /**
+             * @brief Trains a linear SVM with synchronous distributed gradient averaging on the primal hinge-loss objective.
+             */
+            static SVM train_distributed(
+                Matrix xTr,
+                Matrix yTr,
+                double learning_rate,
+                int max_iter,
+                double C,
+                DataAugmentationType augmentation_type,
+                ctorch::distributed::ProcessGroup &group);
 
             /**
              * @brief Predicts the signed class for one sample.

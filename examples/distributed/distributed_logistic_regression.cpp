@@ -162,7 +162,7 @@ Matrix make_labels()
 class LogisticLoss final : public LossFunction
 {
 public:
-    std::shared_ptr<math::ASTNode> sample_loss(const Matrix &x, int y) const override
+    std::shared_ptr<math::ASTNode> sample_loss(const Matrix &x, double y) const override
     {
         std::shared_ptr<math::ASTNode> w_transpose_x = math::Num(0);
         for (std::size_t i = 0; i < x.numCols(); ++i)
@@ -173,8 +173,8 @@ public:
         const std::shared_ptr<math::ASTNode> b = math::Var("b");
         const std::shared_ptr<math::ASTNode> logits = w_transpose_x + b;
         const std::shared_ptr<math::ASTNode> y_hat = math::Sigmoid(logits);
-        return -math::Num(static_cast<double>(y)) * math::Log(y_hat) -
-               (math::Num(1.0) - math::Num(static_cast<double>(y))) * math::Log(math::Num(1.0) - y_hat);
+        return -math::Num(y) * math::Log(y_hat) -
+               (math::Num(1.0) - math::Num(y)) * math::Log(math::Num(1.0) - y_hat);
     }
 
     std::shared_ptr<math::ASTNode> regularizer() const override

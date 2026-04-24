@@ -1,6 +1,11 @@
 #include "math/matrix.hpp"
 #include "math/ast.hpp"
 
+namespace ctorch::distributed
+{
+    class ProcessGroup;
+}
+
 namespace ml
 {
 
@@ -176,6 +181,8 @@ namespace ml
     class KernelSVM
     {
     private:
+        KernelSVM() = default;
+
         Matrix xTr;                   ///< Cached training features.
         Matrix yTr;                   ///< Cached training labels.
         std::vector<Matrix> xTr_rows; ///< Row-wise training sample cache.
@@ -197,6 +204,18 @@ namespace ml
          * @param kernel_options Kernel function options.
          */
         KernelSVM(Matrix xTr, Matrix yTr, double learning_rate, int max_iter, double C, KernelOptions kernel_options);
+
+        /**
+         * @brief Trains a kernel SVM with synchronous distributed gradient averaging.
+         */
+        static KernelSVM train_distributed(
+            Matrix xTr,
+            Matrix yTr,
+            double learning_rate,
+            int max_iter,
+            double C,
+            KernelOptions kernel_options,
+            ctorch::distributed::ProcessGroup &group);
 
         /**
          * @brief Builds the symbolic training objective.

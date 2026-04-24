@@ -2,6 +2,11 @@
 #include "math/matrix.hpp"
 #include "svm.hpp"
 
+namespace ctorch::distributed
+{
+    class ProcessGroup;
+}
+
 namespace ml
 {
 
@@ -14,6 +19,8 @@ namespace ml
     class RandomFourierSVM
     {
     private:
+        RandomFourierSVM() = default;
+
         int D;       ///< Number of random Fourier features.
         double gamma;///< RBF kernel bandwidth factor used in RFF mapping.
         Matrix W;    ///< Random projection matrix.
@@ -39,6 +46,19 @@ namespace ml
          * @param C SVM hinge-loss penalty coefficient.
          */
         RandomFourierSVM(Matrix xTr, Matrix yTr, int D, double gamma, double learning_rate, int max_iter, double C);
+
+        /**
+         * @brief Trains the RFF pipeline with synchronous distributed training for the inner SVM.
+         */
+        static RandomFourierSVM train_distributed(
+            Matrix xTr,
+            Matrix yTr,
+            int D,
+            double gamma,
+            double learning_rate,
+            int max_iter,
+            double C,
+            ctorch::distributed::ProcessGroup &group);
 
         /**
          * @brief Predicts class label for one sample.

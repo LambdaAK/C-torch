@@ -71,4 +71,22 @@ make py FILE=examples/python/train_nn_regression.py ARGS="--distributed --rank 1
 Add `--checkpoint-prefix artifacts/py_models/nonlinear_regression` to save distributed checkpoints, and `--resume-checkpoint` to reload them.
 Start rank `0` first so the TCP master is listening before the other rank connects.
 
+Classical models also expose clean distributed classmethods:
+
+```python
+from ctorch import LogisticRegression, OptimType, TcpProcessGroup
+
+group = TcpProcessGroup("127.0.0.1", 29500, rank=0, world_size=2)
+model = LogisticRegression.train_distributed(
+    x_train,
+    y_train,
+    optim_type=OptimType.GD,
+    learning_rate=0.05,
+    max_iter=1000,
+    group=group,
+)
+```
+
+`LinearRegression`, `SVM`, `KernelSVM`, and `RandomFourierSVM` expose the same pattern with their own constructor arguments.
+
 For notebook usage, set `CTORCH_LIB_PATH` before importing `ctorch` if the shared library is outside the package directory.

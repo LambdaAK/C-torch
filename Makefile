@@ -13,7 +13,7 @@ CMAKE ?= cmake
 CMAKE_FLAGS ?= -DCMAKE_BUILD_TYPE=Release
 PYTHON ?= python3
 
-.PHONY: help configure build test clean classification ndtictactoe kernel-demo linear-regression-demo logistic-regression-demo distributed-logistic-demo recommender-cmake py py-bindings py-wheel
+.PHONY: help configure build test clean classification ndtictactoe kernel-demo linear-regression-demo logistic-regression-demo distributed-logistic-demo distributed-classical-demo recommender-cmake py py-bindings py-wheel
 
 help:
 	@echo "Targets:"
@@ -27,6 +27,7 @@ help:
 	@echo "  make linear-regression-demo - build the noisy line Linear Regression demo"
 	@echo "  make logistic-regression-demo - build the two-blob Logistic Regression demo"
 	@echo "  make distributed-logistic-demo - build the distributed logistic regression demo"
+	@echo "  make distributed-classical-demo - build the distributed classical-model demo"
 	@echo "  make classification / ndtictactoe - build experiments with their Makefiles"
 	@echo "  make recommender-cmake - print CMake line to build recommender (optional deps)"
 	@echo "  make clean       - rm -rf $(BUILD_DIR)"
@@ -71,6 +72,9 @@ logistic-regression-demo: configure
 
 distributed-logistic-demo: configure
 	$(CMAKE) --build $(BUILD_DIR) --target distributed_logistic_demo --parallel
+
+distributed-classical-demo: configure
+	$(CMAKE) --build $(BUILD_DIR) --target distributed_classical_models --parallel
 
 recommender-cmake:
 	@echo "$(CMAKE) -B $(BUILD_DIR) -DCTORCH_BUILD_RECOMMENDER=ON $(CMAKE_FLAGS) . && $(CMAKE) --build $(BUILD_DIR) --target recommender"

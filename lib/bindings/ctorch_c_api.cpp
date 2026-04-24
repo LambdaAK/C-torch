@@ -49,9 +49,8 @@ class RegressionMSELoss final : public LossFunction
 public:
     RegressionMSELoss(size_t dim, double l2) : feature_dim(dim), l2_lambda(l2) {}
 
-    std::shared_ptr<math::ASTNode> sample_loss(const Matrix& x, int y_scaled) const override
+    std::shared_ptr<math::ASTNode> sample_loss(const Matrix& x, double y) const override
     {
-        const double y = static_cast<double>(y_scaled) / 10000.0;
         std::shared_ptr<math::ASTNode> pred = math::Num(0.0);
         for (size_t i = 0; i < x.numCols(); ++i)
         {
@@ -83,7 +82,7 @@ public:
 class LogisticLossFn final : public LossFunction
 {
 public:
-    std::shared_ptr<math::ASTNode> sample_loss(const Matrix& x, int y) const override
+    std::shared_ptr<math::ASTNode> sample_loss(const Matrix& x, double y) const override
     {
         std::shared_ptr<math::ASTNode> w_transpose_x = math::Num(0.0);
         for (size_t i = 0; i < x.numCols(); ++i)
@@ -95,8 +94,8 @@ public:
         auto b = math::Var("b");
         auto z = w_transpose_x + b;
         auto y_hat = math::Sigmoid(z);
-        return -math::Num(static_cast<double>(y)) * math::Log(y_hat) -
-               (math::Num(1.0) - math::Num(static_cast<double>(y))) * math::Log(math::Num(1.0) - y_hat);
+        return -math::Num(y) * math::Log(y_hat) -
+               (math::Num(1.0) - math::Num(y)) * math::Log(math::Num(1.0) - y_hat);
     }
 
     std::shared_ptr<math::ASTNode> regularizer() const override
@@ -114,7 +113,7 @@ std::unordered_map<std::string, double> zero_initial_theta(
     const auto rows = xTr.rowsAsMatrices();
     for (size_t i = 0; i < xTr.numRows(); ++i)
     {
-        const int yi = static_cast<int>(yTr.at(0, i));
+        const double yi = yTr.at(0, i);
         auto root = loss.sample_loss(rows[i], yi);
         auto vi = root->variables();
         names.insert(vi.begin(), vi.end());
@@ -909,6 +908,26 @@ CTorchLinearRegression* ctorch_linear_regression_create(
     }, nullptr);
 }
 
+CTorchLinearRegression* ctorch_linear_regression_train_distributed(
+    const CTorchMatrix* x_train,
+    const CTorchMatrix* y_train,
+    double learning_rate,
+    int max_iter,
+    CTorchTcpProcessGroup* group)
+{
+    return run_api<CTorchLinearRegression*>([&]() -> CTorchLinearRegression* {
+        auto handle = std::make_unique<CTorchLinearRegression>();
+        handle->value = std::make_unique<ml::LinearRegression>(
+            ml::LinearRegression::train_distributed(
+                as_matrix_ref(x_train),
+                as_matrix_ref(y_train),
+                learning_rate,
+                max_iter,
+                as_process_group_ref(group)));
+        return handle.release();
+    }, nullptr);
+}
+
 void ctorch_linear_regression_destroy(CTorchLinearRegression* model)
 {
     delete model;
@@ -983,6 +1002,47 @@ CTorchLogisticRegression* ctorch_logistic_regression_create(
             as_matrix_ref(y_train),
             params,
             as_augmentation_type(augmentation_type));
+        return handle.release();
+    }, nullptr);
+}
+
+CTorchLogisticRegression* ctorch_logistic_regression_train_distributed(
+    const CTorchMatrix* x_train,
+    const CTorchMatrix* y_train,
+    CTorchOptimType optim_type,
+    double learning_rate,
+    int max_iter,
+    int batch_size,
+    double beta1,
+    double beta2,
+    double epsilon,
+    double rho,
+    double weight_decay,
+    CTorchDataAugmentationType augmentation_type,
+    CTorchTcpProcessGroup* group)
+{
+    return run_api<CTorchLogisticRegression*>([&]() -> CTorchLogisticRegression* {
+        math::OptimParams params(
+            as_optim_type(optim_type),
+            learning_rate,
+            max_iter,
+            Matrix(),
+            Matrix(),
+            batch_size,
+            beta1,
+            beta2,
+            epsilon,
+            rho,
+            weight_decay);
+
+        auto handle = std::make_unique<CTorchLogisticRegression>();
+        handle->value = std::make_unique<ml::LogisticRegression>(
+            ml::LogisticRegression::train_distributed(
+                as_matrix_ref(x_train),
+                as_matrix_ref(y_train),
+                params,
+                as_augmentation_type(augmentation_type),
+                as_process_group_ref(group)));
         return handle.release();
     }, nullptr);
 }
@@ -1099,6 +1159,30 @@ CTorchSVM* ctorch_svm_create(
     }, nullptr);
 }
 
+CTorchSVM* ctorch_svm_train_distributed(
+    const CTorchMatrix* x_train,
+    const CTorchMatrix* y_train,
+    double learning_rate,
+    int max_iter,
+    double c_value,
+    CTorchDataAugmentationType augmentation_type,
+    CTorchTcpProcessGroup* group)
+{
+    return run_api<CTorchSVM*>([&]() -> CTorchSVM* {
+        auto handle = std::make_unique<CTorchSVM>();
+        handle->value = std::make_unique<ml::SVM>(
+            ml::SVM::train_distributed(
+                as_matrix_ref(x_train),
+                as_matrix_ref(y_train),
+                learning_rate,
+                max_iter,
+                c_value,
+                as_augmentation_type(augmentation_type),
+                as_process_group_ref(group)));
+        return handle.release();
+    }, nullptr);
+}
+
 void ctorch_svm_destroy(CTorchSVM* model)
 {
     delete model;
@@ -1155,6 +1239,31 @@ CTorchKernelSVM* ctorch_kernel_svm_create(
             max_iter,
             c_value,
             as_kernel_options(kernel_type, gamma));
+        return handle.release();
+    }, nullptr);
+}
+
+CTorchKernelSVM* ctorch_kernel_svm_train_distributed(
+    const CTorchMatrix* x_train,
+    const CTorchMatrix* y_train,
+    double learning_rate,
+    int max_iter,
+    double c_value,
+    CTorchKernelType kernel_type,
+    double gamma,
+    CTorchTcpProcessGroup* group)
+{
+    return run_api<CTorchKernelSVM*>([&]() -> CTorchKernelSVM* {
+        auto handle = std::make_unique<CTorchKernelSVM>();
+        handle->value = std::make_unique<ml::KernelSVM>(
+            ml::KernelSVM::train_distributed(
+                as_matrix_ref(x_train),
+                as_matrix_ref(y_train),
+                learning_rate,
+                max_iter,
+                c_value,
+                as_kernel_options(kernel_type, gamma),
+                as_process_group_ref(group)));
         return handle.release();
     }, nullptr);
 }
@@ -1253,6 +1362,32 @@ CTorchRandomFourierSVM* ctorch_random_fourier_svm_create(
             learning_rate,
             max_iter,
             c_value);
+        return handle.release();
+    }, nullptr);
+}
+
+CTorchRandomFourierSVM* ctorch_random_fourier_svm_train_distributed(
+    const CTorchMatrix* x_train,
+    const CTorchMatrix* y_train,
+    int d_features,
+    double gamma,
+    double learning_rate,
+    int max_iter,
+    double c_value,
+    CTorchTcpProcessGroup* group)
+{
+    return run_api<CTorchRandomFourierSVM*>([&]() -> CTorchRandomFourierSVM* {
+        auto handle = std::make_unique<CTorchRandomFourierSVM>();
+        handle->value = std::make_unique<ml::RandomFourierSVM>(
+            ml::RandomFourierSVM::train_distributed(
+                as_matrix_ref(x_train),
+                as_matrix_ref(y_train),
+                d_features,
+                gamma,
+                learning_rate,
+                max_iter,
+                c_value,
+                as_process_group_ref(group)));
         return handle.release();
     }, nullptr);
 }

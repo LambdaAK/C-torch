@@ -251,7 +251,7 @@ namespace math
                         for (std::size_t i = begin; i < end; ++i)
                         {
                             Matrix x = xTr_rows[i];
-                            int y = static_cast<int>(yTr.at(0, i));
+                            const double y = yTr.at(0, i);
                             sample_losses[i] = loss_function->sample_loss(x, y);
                         }
                     }
@@ -323,7 +323,7 @@ namespace math
                         {
                             const int index = sampled_indices[j];
                             Matrix x = xTr_rows[index];
-                            int y = static_cast<int>(yTr.at(0, index));
+                            const double y = yTr.at(0, index);
                             sample_losses[j] = loss_function->sample_loss(x, y);
                         }
                     }

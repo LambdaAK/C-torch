@@ -17,10 +17,10 @@
             /**
              * @brief Returns per-sample symbolic loss expression.
              * @param x Single input sample row matrix.
-             * @param y Corresponding label.
+             * @param y Corresponding label or regression target.
              * @return AST encoding sample loss.
              */
-            virtual std::shared_ptr<math::ASTNode> sample_loss(const Matrix &x, int y) const = 0;
+            virtual std::shared_ptr<math::ASTNode> sample_loss(const Matrix &x, double y) const = 0;
 
             /**
              * @brief Returns symbolic regularization term.

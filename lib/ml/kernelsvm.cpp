@@ -1,12 +1,120 @@
 #include "kernelsvm.hpp"
+#include "distributed/distributed_optimizer.hpp"
 #include "math/optim.hpp"
 
 using math::ASTNode;
+using math::Max;
 using math::Num;
 using math::Var;
 
+namespace
+{
+class KernelSVMLossFunction final : public LossFunction
+{
+private:
+    std::vector<Matrix> xTr_rows_;
+    Matrix kernel_matrix_;
+    ml::KernelOptions kernel_options_;
+    double C_;
+
+public:
+    KernelSVMLossFunction(Matrix xTr, ml::KernelOptions kernel_options, double C)
+        : xTr_rows_(xTr.rowsAsMatrices()),
+          kernel_matrix_(xTr.numRows(), xTr.numRows()),
+          kernel_options_(kernel_options),
+          C_(C)
+    {
+        for (std::size_t i = 0; i < xTr_rows_.size(); ++i)
+        {
+            for (std::size_t j = 0; j < xTr_rows_.size(); ++j)
+            {
+                kernel_matrix_(i, j) = ml::Kernels::kernel(xTr_rows_[i], xTr_rows_[j], kernel_options_);
+            }
+        }
+    }
+
+    std::shared_ptr<ASTNode> sample_loss(const Matrix &x, double y) const override
+    {
+        std::shared_ptr<ASTNode> inside = Num(0);
+        for (std::size_t i = 0; i < xTr_rows_.size(); ++i)
+        {
+            std::shared_ptr<ASTNode> alpha_i = Var("alpha" + std::to_string(i));
+            inside = inside + alpha_i * Num(ml::Kernels::kernel(xTr_rows_[i], x, kernel_options_));
+        }
+
+        inside = inside + Var("b");
+        inside = Num(y) * inside;
+        return Num(C_) * Max(Num(0), Num(1) - inside);
+    }
+
+    std::shared_ptr<ASTNode> regularizer() const override
+    {
+        std::shared_ptr<ASTNode> reg = Num(0);
+        for (std::size_t i = 0; i < xTr_rows_.size(); ++i)
+        {
+            for (std::size_t j = 0; j < xTr_rows_.size(); ++j)
+            {
+                std::shared_ptr<ASTNode> alpha_i = Var("alpha" + std::to_string(i));
+                std::shared_ptr<ASTNode> alpha_j = Var("alpha" + std::to_string(j));
+                reg = reg + alpha_i * alpha_j * Num(kernel_matrix_(i, j));
+            }
+        }
+        return reg / Num(2);
+    }
+};
+} // namespace
+
 namespace ml
 {
+    KernelSVM KernelSVM::train_distributed(
+        Matrix xTr,
+        Matrix yTr,
+        double learning_rate,
+        int max_iter,
+        double C,
+        KernelOptions kernel_options,
+        ctorch::distributed::ProcessGroup &group)
+    {
+        KernelSVM model;
+        model.xTr = xTr;
+        model.yTr = yTr;
+        model.learning_rate = learning_rate;
+        model.max_iter = max_iter;
+        model.C = C;
+        model.kernel_options = kernel_options;
+        model.xTr_rows = xTr.rowsAsMatrices();
+        model.weights = Matrix(1, xTr.numRows());
+        model.bias = 0.0;
+
+        if (model.xTr_rows.size() < 2)
+        {
+            throw std::invalid_argument("At least two training points are required.");
+        }
+
+        std::shared_ptr<LossFunction> loss_function = std::make_shared<KernelSVMLossFunction>(xTr, kernel_options, C);
+
+        std::unordered_map<std::string, double> values;
+        for (size_t i = 0; i < xTr.numRows(); i++)
+        {
+            std::string w_i = "alpha" + std::to_string(i);
+            values[w_i] = 1;
+        }
+        values["b"] = 1;
+
+        math::OptimParams optim_params(math::OptimType::GD, learning_rate, max_iter);
+        ctorch::distributed::DistributedOptimizer optimizer(group, optim_params);
+        std::unordered_map<std::string, double> result = optimizer.optimize(loss_function, model.xTr, model.yTr, values);
+
+        for (size_t i = 0; i < xTr.numRows(); i++)
+        {
+            std::string w_i = "alpha" + std::to_string(i);
+            model.weights(0, i) = result[w_i];
+        }
+
+        model.bias = result["b"];
+        return model;
+    }
+
     KernelSVM::KernelSVM(Matrix xTr, Matrix yTr, double learning_rate, int max_iter, double C, KernelOptions kernel_options)
         : xTr(xTr), yTr(yTr), learning_rate(learning_rate), max_iter(max_iter), C(C), kernel_options(kernel_options)
     {

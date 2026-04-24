@@ -1,10 +1,12 @@
 #include "randomfouriersvm.hpp"
+#include "distributed/distributed_optimizer.hpp"
 #include "math/matrix.hpp"
 #include "math/dataaugmentor.hpp"
 #include "math/parallel.hpp"
 #include <random>
 #include <cmath>
 #include <stdexcept>
+#include <unordered_map>
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
@@ -12,6 +14,72 @@
 
 namespace ml
 {
+    RandomFourierSVM RandomFourierSVM::train_distributed(
+        Matrix xTr,
+        Matrix yTr,
+        int D,
+        double gamma,
+        double learning_rate,
+        int max_iter,
+        double C,
+        ctorch::distributed::ProcessGroup &group)
+    {
+        if (D <= 0)
+        {
+            throw std::invalid_argument("RandomFourierSVM: D must be positive.");
+        }
+        if (!std::isfinite(gamma) || gamma <= 0.0)
+        {
+            throw std::invalid_argument("RandomFourierSVM: gamma must be finite and positive.");
+        }
+        if (yTr.numRows() != 1)
+        {
+            throw std::invalid_argument("RandomFourierSVM: yTr must be a row vector (1 x N).");
+        }
+        if (xTr.numRows() != yTr.numCols())
+        {
+            throw std::invalid_argument("RandomFourierSVM: number of samples and labels must match.");
+        }
+
+        RandomFourierSVM model;
+        model.D = D;
+        model.gamma = gamma;
+        model.W = Matrix(D, xTr.numCols());
+        model.b = Matrix(D, 1);
+
+        std::random_device rd;
+        std::mt19937 gen(rd());
+        const double w_std = std::sqrt(2.0 * gamma + 1e-15);
+        std::normal_distribution<double> w_dist(0.0, w_std);
+        std::uniform_real_distribution<double> b_dist(0.0, 2.0 * M_PI);
+
+        if (group.rank() == 0)
+        {
+            for (int i = 0; i < D; ++i)
+            {
+                for (size_t j = 0; j < xTr.numCols(); ++j)
+                {
+                    model.W(i, j) = w_dist(gen);
+                }
+                model.b(i, 0) = b_dist(gen);
+            }
+        }
+
+        group.broadcast(model.W, 0);
+        group.broadcast(model.b, 0);
+
+        Matrix transformed_xTr = model.transform_data(xTr);
+        model.svm = SVM::train_distributed(
+            transformed_xTr,
+            yTr,
+            learning_rate,
+            max_iter,
+            C,
+            DataAugmentationType::NO_OP,
+            group);
+        return model;
+    }
+
     RandomFourierSVM::RandomFourierSVM(Matrix xTr, Matrix yTr, int D, double gamma, double learning_rate, int max_iter, double C)
     {
         if (D <= 0)

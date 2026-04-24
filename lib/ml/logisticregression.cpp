@@ -1,4 +1,5 @@
 #include "logisticregression.hpp"
+#include "distributed/distributed_optimizer.hpp"
 #include "math/matrix.hpp"
 #include "math/ast.hpp"
 #include "math/optim.hpp"
@@ -12,15 +13,96 @@ using math::Optimizer;
 using math::OptimParams;
 using math::OptimType;
 using math::SGD;
+using math::Log;
+using math::Sigmoid;
 using math::Var;
+
+namespace
+{
+class DistributedLogisticLossFunction final : public LossFunction
+{
+public:
+    std::shared_ptr<ASTNode> sample_loss(const Matrix &x, double y) const override
+    {
+        std::shared_ptr<ASTNode> w_transpose_x = Num(0);
+
+        for (size_t i = 0; i < x.numCols(); i++)
+        {
+            std::shared_ptr<ASTNode> w_i = Var("w" + std::to_string(i));
+            std::shared_ptr<ASTNode> x_i = Num(x.at(0, i));
+            w_transpose_x = w_transpose_x + w_i * x_i;
+        }
+
+        std::shared_ptr<ASTNode> b = Var("b");
+        std::shared_ptr<ASTNode> w_transpose_x_plus_b = w_transpose_x + b;
+        std::shared_ptr<ASTNode> y_hat = Sigmoid(w_transpose_x_plus_b);
+        return -Num(y) * Log(y_hat) - (Num(1) - Num(y)) * Log(Num(1) - y_hat);
+    }
+
+    std::shared_ptr<ASTNode> regularizer() const override
+    {
+        return Num(0);
+    }
+};
+} // namespace
 
 namespace ml
 {
 
+    LogisticRegression LogisticRegression::train_distributed(
+        Matrix xTr,
+        Matrix yTr,
+        OptimParams optim_params,
+        DataAugmentationType data_augmentation_type,
+        ctorch::distributed::ProcessGroup &group)
+    {
+        if (xTr.numRows() != yTr.numCols())
+        {
+            throw std::invalid_argument("Number of training samples and labels must be equal.");
+        }
+
+        if (yTr.numRows() != 1)
+        {
+            throw std::invalid_argument("Labels must be a row vector.");
+        }
+
+        xTr = DataAugmentor::augment_data(xTr, data_augmentation_type);
+
+        LogisticRegression model;
+        model.xTr = xTr;
+        model.yTr = yTr;
+        model.xTr_rows = xTr.rowsAsMatrices();
+        model.weights = Matrix(1, xTr.numCols());
+        model.bias = 0.0;
+        model.optim_params = optim_params;
+        model.data_augmentation_type = data_augmentation_type;
+
+        std::unordered_map<std::string, double> values;
+        for (size_t i = 0; i < model.xTr.numCols(); ++i)
+        {
+            std::string w_i = "w" + std::to_string(i);
+            values[w_i] = 5;
+        }
+        values["b"] = 1;
+
+        std::shared_ptr<LossFunction> loss_function = std::make_shared<DistributedLogisticLossFunction>();
+        ctorch::distributed::DistributedOptimizer optimizer(group, optim_params);
+        std::unordered_map<std::string, double> result = optimizer.optimize(loss_function, model.xTr, yTr, values);
+
+        for (size_t i = 0; i < model.xTr.numCols(); ++i)
+        {
+            std::string w_i = "w" + std::to_string(i);
+            model.weights(0, i) = result[w_i];
+        }
+
+        model.bias = result["b"];
+        return model;
+    }
+
     /**
      * Compute the loss function for one sample in logistic regression
      */
-    std::shared_ptr<ASTNode> LogisticRegression::single_loss(const Matrix &x, int y) const
+    std::shared_ptr<ASTNode> LogisticRegression::single_loss(const Matrix &x, double y) const
     {
         /*
             The weights are w1, ..., wn and the bias is b
@@ -56,7 +138,7 @@ namespace ml
         for (size_t i = 0; i < xTr.numRows(); i++)
         {
             Matrix x = xTr_rows[i];
-            int y = yTr.at(0, i);
+            double y = yTr.at(0, i);
             loss = loss + single_loss(x, y);
         }
 
@@ -71,7 +153,7 @@ namespace ml
 
     class LogisticLossFunction : public LossFunction
     {
-        std::shared_ptr<ASTNode> sample_loss(const Matrix &x, int y) const override
+        std::shared_ptr<ASTNode> sample_loss(const Matrix &x, double y) const override
         {
             /*
                 The weights are w1, ..., wn and the bias is b

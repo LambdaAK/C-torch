@@ -139,6 +139,12 @@ CTorchLinearRegression* ctorch_linear_regression_create(
     const CTorchMatrix* y_train,
     double learning_rate,
     int max_iter);
+CTorchLinearRegression* ctorch_linear_regression_train_distributed(
+    const CTorchMatrix* x_train,
+    const CTorchMatrix* y_train,
+    double learning_rate,
+    int max_iter,
+    CTorchTcpProcessGroup* group);
 void ctorch_linear_regression_destroy(CTorchLinearRegression* model);
 bool ctorch_linear_regression_predict(
     const CTorchLinearRegression* model,
@@ -164,6 +170,20 @@ CTorchLogisticRegression* ctorch_logistic_regression_create(
     double rho,
     double weight_decay,
     CTorchDataAugmentationType augmentation_type);
+CTorchLogisticRegression* ctorch_logistic_regression_train_distributed(
+    const CTorchMatrix* x_train,
+    const CTorchMatrix* y_train,
+    CTorchOptimType optim_type,
+    double learning_rate,
+    int max_iter,
+    int batch_size,
+    double beta1,
+    double beta2,
+    double epsilon,
+    double rho,
+    double weight_decay,
+    CTorchDataAugmentationType augmentation_type,
+    CTorchTcpProcessGroup* group);
 void ctorch_logistic_regression_destroy(CTorchLogisticRegression* model);
 bool ctorch_logistic_regression_predict(
     const CTorchLogisticRegression* model,
@@ -197,6 +217,14 @@ CTorchSVM* ctorch_svm_create(
     int max_iter,
     double c_value,
     CTorchDataAugmentationType augmentation_type);
+CTorchSVM* ctorch_svm_train_distributed(
+    const CTorchMatrix* x_train,
+    const CTorchMatrix* y_train,
+    double learning_rate,
+    int max_iter,
+    double c_value,
+    CTorchDataAugmentationType augmentation_type,
+    CTorchTcpProcessGroup* group);
 void ctorch_svm_destroy(CTorchSVM* model);
 bool ctorch_svm_predict(
     const CTorchSVM* model,
@@ -216,6 +244,15 @@ CTorchKernelSVM* ctorch_kernel_svm_create(
     double c_value,
     CTorchKernelType kernel_type,
     double gamma);
+CTorchKernelSVM* ctorch_kernel_svm_train_distributed(
+    const CTorchMatrix* x_train,
+    const CTorchMatrix* y_train,
+    double learning_rate,
+    int max_iter,
+    double c_value,
+    CTorchKernelType kernel_type,
+    double gamma,
+    CTorchTcpProcessGroup* group);
 void ctorch_kernel_svm_destroy(CTorchKernelSVM* model);
 bool ctorch_kernel_svm_predict(
     const CTorchKernelSVM* model,
@@ -242,6 +279,15 @@ CTorchRandomFourierSVM* ctorch_random_fourier_svm_create(
     double learning_rate,
     int max_iter,
     double c_value);
+CTorchRandomFourierSVM* ctorch_random_fourier_svm_train_distributed(
+    const CTorchMatrix* x_train,
+    const CTorchMatrix* y_train,
+    int d_features,
+    double gamma,
+    double learning_rate,
+    int max_iter,
+    double c_value,
+    CTorchTcpProcessGroup* group);
 void ctorch_random_fourier_svm_destroy(CTorchRandomFourierSVM* model);
 bool ctorch_random_fourier_svm_predict(
     const CTorchRandomFourierSVM* model,

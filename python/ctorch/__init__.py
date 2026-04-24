@@ -210,6 +210,14 @@ _lib.ctorch_linear_regression_create.argtypes = [
     ct.c_int,
 ]
 _lib.ctorch_linear_regression_create.restype = ct.c_void_p
+_lib.ctorch_linear_regression_train_distributed.argtypes = [
+    ct.c_void_p,
+    ct.c_void_p,
+    ct.c_double,
+    ct.c_int,
+    ct.c_void_p,
+]
+_lib.ctorch_linear_regression_train_distributed.restype = ct.c_void_p
 _lib.ctorch_linear_regression_destroy.argtypes = [ct.c_void_p]
 _lib.ctorch_linear_regression_destroy.restype = None
 _lib.ctorch_linear_regression_predict.argtypes = [
@@ -242,6 +250,22 @@ _lib.ctorch_logistic_regression_create.argtypes = [
     ct.c_int,
 ]
 _lib.ctorch_logistic_regression_create.restype = ct.c_void_p
+_lib.ctorch_logistic_regression_train_distributed.argtypes = [
+    ct.c_void_p,
+    ct.c_void_p,
+    ct.c_int,
+    ct.c_double,
+    ct.c_int,
+    ct.c_int,
+    ct.c_double,
+    ct.c_double,
+    ct.c_double,
+    ct.c_double,
+    ct.c_double,
+    ct.c_int,
+    ct.c_void_p,
+]
+_lib.ctorch_logistic_regression_train_distributed.restype = ct.c_void_p
 _lib.ctorch_logistic_regression_destroy.argtypes = [ct.c_void_p]
 _lib.ctorch_logistic_regression_destroy.restype = None
 _lib.ctorch_logistic_regression_predict.argtypes = [
@@ -289,6 +313,16 @@ _lib.ctorch_svm_create.argtypes = [
     ct.c_int,
 ]
 _lib.ctorch_svm_create.restype = ct.c_void_p
+_lib.ctorch_svm_train_distributed.argtypes = [
+    ct.c_void_p,
+    ct.c_void_p,
+    ct.c_double,
+    ct.c_int,
+    ct.c_double,
+    ct.c_int,
+    ct.c_void_p,
+]
+_lib.ctorch_svm_train_distributed.restype = ct.c_void_p
 _lib.ctorch_svm_destroy.argtypes = [ct.c_void_p]
 _lib.ctorch_svm_destroy.restype = None
 _lib.ctorch_svm_predict.argtypes = [
@@ -315,6 +349,17 @@ _lib.ctorch_kernel_svm_create.argtypes = [
     ct.c_double,
 ]
 _lib.ctorch_kernel_svm_create.restype = ct.c_void_p
+_lib.ctorch_kernel_svm_train_distributed.argtypes = [
+    ct.c_void_p,
+    ct.c_void_p,
+    ct.c_double,
+    ct.c_int,
+    ct.c_double,
+    ct.c_int,
+    ct.c_double,
+    ct.c_void_p,
+]
+_lib.ctorch_kernel_svm_train_distributed.restype = ct.c_void_p
 _lib.ctorch_kernel_svm_destroy.argtypes = [ct.c_void_p]
 _lib.ctorch_kernel_svm_destroy.restype = None
 _lib.ctorch_kernel_svm_predict.argtypes = [
@@ -351,6 +396,17 @@ _lib.ctorch_random_fourier_svm_create.argtypes = [
     ct.c_double,
 ]
 _lib.ctorch_random_fourier_svm_create.restype = ct.c_void_p
+_lib.ctorch_random_fourier_svm_train_distributed.argtypes = [
+    ct.c_void_p,
+    ct.c_void_p,
+    ct.c_int,
+    ct.c_double,
+    ct.c_double,
+    ct.c_int,
+    ct.c_double,
+    ct.c_void_p,
+]
+_lib.ctorch_random_fourier_svm_train_distributed.restype = ct.c_void_p
 _lib.ctorch_random_fourier_svm_destroy.argtypes = [ct.c_void_p]
 _lib.ctorch_random_fourier_svm_destroy.restype = None
 _lib.ctorch_random_fourier_svm_predict.argtypes = [
@@ -1161,6 +1217,34 @@ class LinearRegression:
             raise _raise_last_error("LinearRegression(...) failed")
         self._ptr = ct.c_void_p(ptr)
 
+    @classmethod
+    def train_distributed(
+        cls,
+        x_train: Matrix | Sequence[object],
+        y_train: Matrix | Sequence[object],
+        learning_rate: float,
+        max_iter: int,
+        *,
+        group: TcpProcessGroup,
+    ) -> LinearRegression:
+        if not isinstance(group, TcpProcessGroup):
+            raise TypeError("group must be a TcpProcessGroup")
+
+        x_mat = _coerce_matrix(x_train)
+        y_mat = _coerce_row_vector(y_train)
+        ptr = _lib.ctorch_linear_regression_train_distributed(
+            x_mat._ptr,
+            y_mat._ptr,
+            float(learning_rate),
+            int(max_iter),
+            group._ptr,
+        )
+        if not ptr:
+            raise _raise_last_error("LinearRegression.train_distributed failed")
+        model = cls.__new__(cls)
+        model._ptr = ct.c_void_p(ptr)
+        return model
+
     def predict(self, sample: Matrix | Sequence[object]) -> float:
         sample_mat = _coerce_row_vector(sample)
         out = ct.c_double()
@@ -1236,6 +1320,52 @@ class LogisticRegression:
         if not ptr:
             raise _raise_last_error("LogisticRegression(...) failed")
         self._ptr = ct.c_void_p(ptr)
+
+    @classmethod
+    def train_distributed(
+        cls,
+        x_train: Matrix | Sequence[object],
+        y_train: Matrix | Sequence[object],
+        optim_type: OptimType | int = OptimType.GD,
+        learning_rate: float = 0.001,
+        max_iter: int = 1000,
+        batch_size: int = 1,
+        beta1: float = 0.9,
+        beta2: float = 0.999,
+        epsilon: float = 1e-8,
+        rho: float = 0.99,
+        weight_decay: float = 0.0,
+        augmentation: DataAugmentationType | int = DataAugmentationType.NO_OP,
+        *,
+        group: TcpProcessGroup,
+    ) -> LogisticRegression:
+        if not isinstance(group, TcpProcessGroup):
+            raise TypeError("group must be a TcpProcessGroup")
+
+        x_mat = _coerce_matrix(x_train)
+        y_mat = _coerce_row_vector(y_train)
+        optim = _coerce_enum(optim_type, OptimType, "optim_type")
+        augment = _coerce_enum(augmentation, DataAugmentationType, "augmentation")
+        ptr = _lib.ctorch_logistic_regression_train_distributed(
+            x_mat._ptr,
+            y_mat._ptr,
+            int(optim),
+            float(learning_rate),
+            int(max_iter),
+            int(batch_size),
+            float(beta1),
+            float(beta2),
+            float(epsilon),
+            float(rho),
+            float(weight_decay),
+            int(augment),
+            group._ptr,
+        )
+        if not ptr:
+            raise _raise_last_error("LogisticRegression.train_distributed failed")
+        model = cls.__new__(cls)
+        model._ptr = ct.c_void_p(ptr)
+        return model
 
     def predict(self, sample: Matrix | Sequence[object]) -> int:
         sample_mat = _coerce_row_vector(sample)
@@ -1341,6 +1471,39 @@ class SVM:
             raise _raise_last_error("SVM(...) failed")
         self._ptr = ct.c_void_p(ptr)
 
+    @classmethod
+    def train_distributed(
+        cls,
+        x_train: Matrix | Sequence[object],
+        y_train: Matrix | Sequence[object],
+        learning_rate: float,
+        max_iter: int,
+        c_value: float,
+        augmentation: DataAugmentationType | int = DataAugmentationType.NO_OP,
+        *,
+        group: TcpProcessGroup,
+    ) -> SVM:
+        if not isinstance(group, TcpProcessGroup):
+            raise TypeError("group must be a TcpProcessGroup")
+
+        x_mat = _coerce_matrix(x_train)
+        y_mat = _coerce_row_vector(y_train)
+        augment = _coerce_enum(augmentation, DataAugmentationType, "augmentation")
+        ptr = _lib.ctorch_svm_train_distributed(
+            x_mat._ptr,
+            y_mat._ptr,
+            float(learning_rate),
+            int(max_iter),
+            float(c_value),
+            int(augment),
+            group._ptr,
+        )
+        if not ptr:
+            raise _raise_last_error("SVM.train_distributed failed")
+        model = cls.__new__(cls)
+        model._ptr = ct.c_void_p(ptr)
+        return model
+
     def predict(self, sample: Matrix | Sequence[object]) -> int:
         sample_mat = _coerce_row_vector(sample)
         out = ct.c_int()
@@ -1397,6 +1560,41 @@ class KernelSVM:
         if not ptr:
             raise _raise_last_error("KernelSVM(...) failed")
         self._ptr = ct.c_void_p(ptr)
+
+    @classmethod
+    def train_distributed(
+        cls,
+        x_train: Matrix | Sequence[object],
+        y_train: Matrix | Sequence[object],
+        learning_rate: float,
+        max_iter: int,
+        c_value: float,
+        kernel: KernelType | int = KernelType.LINEAR,
+        gamma: float = 1.0,
+        *,
+        group: TcpProcessGroup,
+    ) -> KernelSVM:
+        if not isinstance(group, TcpProcessGroup):
+            raise TypeError("group must be a TcpProcessGroup")
+
+        x_mat = _coerce_matrix(x_train)
+        y_mat = _coerce_row_vector(y_train)
+        kernel_type = _coerce_enum(kernel, KernelType, "kernel")
+        ptr = _lib.ctorch_kernel_svm_train_distributed(
+            x_mat._ptr,
+            y_mat._ptr,
+            float(learning_rate),
+            int(max_iter),
+            float(c_value),
+            int(kernel_type),
+            float(gamma),
+            group._ptr,
+        )
+        if not ptr:
+            raise _raise_last_error("KernelSVM.train_distributed failed")
+        model = cls.__new__(cls)
+        model._ptr = ct.c_void_p(ptr)
+        return model
 
     def predict(self, sample: Matrix | Sequence[object]) -> int:
         sample_mat = _coerce_row_vector(sample)
@@ -1459,6 +1657,40 @@ class RandomFourierSVM:
         if not ptr:
             raise _raise_last_error("RandomFourierSVM(...) failed")
         self._ptr = ct.c_void_p(ptr)
+
+    @classmethod
+    def train_distributed(
+        cls,
+        x_train: Matrix | Sequence[object],
+        y_train: Matrix | Sequence[object],
+        d_features: int,
+        gamma: float,
+        learning_rate: float,
+        max_iter: int,
+        c_value: float,
+        *,
+        group: TcpProcessGroup,
+    ) -> RandomFourierSVM:
+        if not isinstance(group, TcpProcessGroup):
+            raise TypeError("group must be a TcpProcessGroup")
+
+        x_mat = _coerce_matrix(x_train)
+        y_mat = _coerce_row_vector(y_train)
+        ptr = _lib.ctorch_random_fourier_svm_train_distributed(
+            x_mat._ptr,
+            y_mat._ptr,
+            int(d_features),
+            float(gamma),
+            float(learning_rate),
+            int(max_iter),
+            float(c_value),
+            group._ptr,
+        )
+        if not ptr:
+            raise _raise_last_error("RandomFourierSVM.train_distributed failed")
+        model = cls.__new__(cls)
+        model._ptr = ct.c_void_p(ptr)
+        return model
 
     def predict(self, sample: Matrix | Sequence[object]) -> int:
         sample_mat = _coerce_row_vector(sample)
