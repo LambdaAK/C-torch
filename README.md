@@ -173,6 +173,25 @@ make classification   # make -C experiments/classification
 make ndtictactoe     # make -C experiments/ndtictactoe
 ```
 
+### Optional: CUDA Matrix backend
+
+Large `Matrix` ops can run on an NVIDIA GPU: matmul (cuBLAS `Dgemm`), `+`, `-`, scalar `*`,
+`elm_wise_product`, `transpose`, and `relu`/`sigmoid`/`tanh` with their derivatives.
+Nothing that uses `Matrix` changes, so models, `Sequential`, and the Python bindings pick it up automatically.
+It is off by default and needs the CUDA toolkit (Linux/Windows, not macOS):
+
+```bash
+make build-cuda   # cmake -B build-cuda -DCTORCH_ENABLE_CUDA=ON && build
+make test-cuda    # includes GPU-vs-CPU parity tests (tests/test_cuda_matrix.cpp)
+```
+
+- Data stays in host memory. Each GPU op copies in, runs, and copies out, so only large problems go to the GPU
+  (default: matmul with `m*k*n >= 2^21`, elementwise ops with `>= 2^20` elements). Tune it with
+  `ctorch::cuda::set_thresholds(...)` from `math/cuda_backend.hpp`.
+- Set `CTORCH_DEVICE=cpu` or call `ctorch::cuda::set_enabled(false)` to force the CPU path.
+- Results are computed in `double` and match the CPU path up to floating-point rounding.
+- Without `CTORCH_ENABLE_CUDA`, `matrix.cpp` compiles exactly as before.
+
 ### Optional: recommender (CMake)
 
 Requires **libcurl**, **Python 3.9+** with **development headers**, and **NumPy** importable from that interpreter:

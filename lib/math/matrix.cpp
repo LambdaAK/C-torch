@@ -5,6 +5,30 @@
 #include <stdexcept>
 #include <iostream>
 
+#ifdef CTORCH_HAS_CUDA
+#include "cuda_backend.hpp"
+// Route large problems to the GPU; small ones fall through to the CPU path below.
+#define CTORCH_CUDA_UNARY(OP, SCALAR)                                                        \
+    if (ctorch::cuda::should_use_elementwise(data.size()))                                  \
+    {                                                                                        \
+        Matrix gpu_result(rows, cols);                                                       \
+        ctorch::cuda::unary(ctorch::cuda::UnaryOp::OP, data.data(), gpu_result.data.data(), \
+                            data.size(), (SCALAR));                                          \
+        return gpu_result;                                                                   \
+    }
+#define CTORCH_CUDA_BINARY(OP, OTHER)                                                        \
+    if (ctorch::cuda::should_use_elementwise(data.size()))                                  \
+    {                                                                                        \
+        Matrix gpu_result(rows, cols);                                                       \
+        ctorch::cuda::binary(ctorch::cuda::BinaryOp::OP, data.data(), (OTHER).data.data(),  \
+                             gpu_result.data.data(), data.size());                           \
+        return gpu_result;                                                                   \
+    }
+#else
+#define CTORCH_CUDA_UNARY(OP, SCALAR)
+#define CTORCH_CUDA_BINARY(OP, OTHER)
+#endif
+
 // Constructor: Zero-initialized matrix
 Matrix::Matrix(size_t rows, size_t cols)
     : rows(rows), cols(cols), data(rows * cols, 0.0) {}
@@ -106,6 +130,14 @@ void Matrix::print() const
 
 Matrix Matrix::transpose() const
 {
+#ifdef CTORCH_HAS_CUDA
+    if (ctorch::cuda::should_use_elementwise(data.size()))
+    {
+        Matrix gpu_result(cols, rows);
+        ctorch::cuda::transpose(data.data(), gpu_result.data.data(), rows, cols);
+        return gpu_result;
+    }
+#endif
     Matrix result(cols, rows); // make a matrix with the swapped dimensions
 
     // Map (i, j) -> (j, i) in parallel across source rows.
@@ -127,6 +159,7 @@ Matrix Matrix::operator+(const Matrix &other) const
 {
     if (rows != other.rows || cols != other.cols)
         throw std::invalid_argument("Matrix dimensions must match for addition");
+    CTORCH_CUDA_BINARY(Add, other)
     Matrix result(rows, cols);
     ctorch::parallel::parallel_for_items(rows, cols, [&](size_t begin, size_t end)
     {
@@ -146,6 +179,7 @@ Matrix Matrix::operator-(const Matrix &other) const
 {
     if (rows != other.rows || cols != other.cols)
         throw std::invalid_argument("Matrix dimensions must match for subtraction");
+    CTORCH_CUDA_BINARY(Sub, other)
     Matrix result(rows, cols);
     ctorch::parallel::parallel_for_items(rows, cols, [&](size_t begin, size_t end)
     {
@@ -164,6 +198,7 @@ Matrix Matrix::operator-(const Matrix &other) const
 // scalar multiplication
 Matrix Matrix::operator*(double scalar) const
 {
+    CTORCH_CUDA_UNARY(Scale, scalar)
     Matrix result(rows, cols);
     ctorch::parallel::parallel_for_items(rows, cols, [&](size_t begin, size_t end)
     {
@@ -198,6 +233,14 @@ Matrix Matrix::operator*(const Matrix &m) const
     {
         return result;
     }
+
+#ifdef CTORCH_HAS_CUDA
+    if (ctorch::cuda::should_use_matmul(rows, cols, m.cols))
+    {
+        ctorch::cuda::matmul(data.data(), m.data.data(), result.data.data(), rows, cols, m.cols);
+        return result;
+    }
+#endif
 
     ctorch::parallel::parallel_for_items(rows, cols * m.cols, [&](size_t begin, size_t end)
     {
@@ -332,6 +375,7 @@ double Matrix::inner_product(const Matrix &other) const
 
 Matrix Matrix::relu() const
 {
+    CTORCH_CUDA_UNARY(Relu, 0.0)
     Matrix result(rows, cols);
     ctorch::parallel::parallel_for_items(rows, cols, [&](size_t begin, size_t end)
     {
@@ -349,6 +393,7 @@ Matrix Matrix::relu() const
 
 Matrix Matrix::relu_deriv() const
 {
+    CTORCH_CUDA_UNARY(ReluDeriv, 0.0)
     Matrix result(rows, cols);
     ctorch::parallel::parallel_for_items(rows, cols, [&](size_t begin, size_t end)
     {
@@ -366,6 +411,7 @@ Matrix Matrix::relu_deriv() const
 
 Matrix Matrix::sigmoid() const
 {
+    CTORCH_CUDA_UNARY(Sigmoid, 0.0)
     Matrix result(rows, cols);
     ctorch::parallel::parallel_for_items(rows, cols, [&](size_t begin, size_t end)
     {
@@ -383,6 +429,7 @@ Matrix Matrix::sigmoid() const
 
 Matrix Matrix::sigmoid_deriv() const
 {
+    CTORCH_CUDA_UNARY(SigmoidDeriv, 0.0)
     Matrix result(rows, cols);
     ctorch::parallel::parallel_for_items(rows, cols, [&](size_t begin, size_t end)
     {
@@ -401,6 +448,7 @@ Matrix Matrix::sigmoid_deriv() const
 
 Matrix Matrix::tanh() const
 {
+    CTORCH_CUDA_UNARY(Tanh, 0.0)
     Matrix result(rows, cols);
     ctorch::parallel::parallel_for_items(rows, cols, [&](size_t begin, size_t end)
     {
@@ -418,6 +466,7 @@ Matrix Matrix::tanh() const
 
 Matrix Matrix::tanh_deriv() const
 {
+    CTORCH_CUDA_UNARY(TanhDeriv, 0.0)
     Matrix result(rows, cols);
     ctorch::parallel::parallel_for_items(rows, cols, [&](size_t begin, size_t end)
     {
@@ -441,6 +490,7 @@ Matrix Matrix::elm_wise_product(const Matrix &other) const
     {
         throw std::invalid_argument("Matrix dimensions must match for element-wise product");
     }
+    CTORCH_CUDA_BINARY(Mul, other)
 
     Matrix result(rows, cols);
     ctorch::parallel::parallel_for_items(rows, cols, [&](size_t begin, size_t end)

@@ -31,14 +31,37 @@ set(CTORCH_SOURCES
     lib/ml/gaussian_nb.cpp
 )
 
+option(CTORCH_ENABLE_CUDA "Accelerate large Matrix ops with CUDA/cuBLAS (needs an NVIDIA toolkit)" OFF)
+list(APPEND CTORCH_SOURCES lib/math/cuda_backend_common.cpp)
+if(CTORCH_ENABLE_CUDA)
+    if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
+        if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.24)
+            set(CMAKE_CUDA_ARCHITECTURES native)
+        else()
+            set(CMAKE_CUDA_ARCHITECTURES 70 75 80 86)
+        endif()
+    endif()
+    enable_language(CUDA)
+    find_package(CUDAToolkit REQUIRED)
+    set(CMAKE_CUDA_STANDARD 17)
+    set(CMAKE_CUDA_STANDARD_REQUIRED ON)
+    list(APPEND CTORCH_SOURCES lib/math/cuda_backend.cu)
+else()
+    list(APPEND CTORCH_SOURCES lib/math/cuda_backend_stub.cpp)
+endif()
+
 add_library(ctorch STATIC ${CTORCH_SOURCES})
 set_target_properties(ctorch PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_include_directories(ctorch PUBLIC
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/lib>
 )
 target_link_libraries(ctorch PUBLIC Threads::Threads)
+if(CTORCH_ENABLE_CUDA)
+    target_link_libraries(ctorch PUBLIC CUDA::cudart CUDA::cublas)
+    target_compile_definitions(ctorch PUBLIC CTORCH_HAS_CUDA=1)
+endif()
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
-    target_compile_options(ctorch PRIVATE -Wall -Wextra)
+    target_compile_options(ctorch PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wall -Wextra>)
 endif()
 
 option(CTORCH_BUILD_PYTHON_BINDINGS "Build Python ctypes bindings (Matrix + classical ML models)" OFF)

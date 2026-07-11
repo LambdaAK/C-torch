@@ -13,13 +13,15 @@ CMAKE ?= cmake
 CMAKE_FLAGS ?= -DCMAKE_BUILD_TYPE=Release
 PYTHON ?= python3
 
-.PHONY: help configure build test clean classification ndtictactoe kernel-demo linear-regression-demo logistic-regression-demo distributed-logistic-demo distributed-classical-demo recommender-cmake py py-bindings py-wheel
+.PHONY: help configure build build-cuda test-cuda test clean classification ndtictactoe kernel-demo linear-regression-demo logistic-regression-demo distributed-logistic-demo distributed-classical-demo recommender-cmake py py-bindings py-wheel
 
 help:
 	@echo "Targets:"
 	@echo "  make configure   - $(CMAKE) -B $(BUILD_DIR) $(CMAKE_FLAGS) ."
 	@echo "  make build       - configure then compile (classification, tictactoe, ttt_main, tests)"
 	@echo "  make test        - build then ctest --output-on-failure"
+	@echo "  make build-cuda  - build with the CUDA Matrix backend (NVIDIA toolkit required) into build-cuda/"
+	@echo "  make test-cuda   - build-cuda then ctest (includes GPU-vs-CPU parity tests)"
 	@echo "  make py FILE=... [ARGS=...] - python3 FILE with PYTHONPATH=$(CURDIR)/python (ctorch bindings)"
 	@echo "  make py-bindings - build ctorch_c shared library (required by Python package)"
 	@echo "  make py-wheel    - build wheel in ./dist after staging native ctorch_c library"
@@ -51,6 +53,15 @@ build: configure
 
 test: build
 	$(CMAKE) -E chdir $(BUILD_DIR) ctest --output-on-failure
+
+CUDA_BUILD_DIR ?= build-cuda
+
+build-cuda:
+	$(CMAKE) -B $(CUDA_BUILD_DIR) -DCTORCH_ENABLE_CUDA=ON $(CMAKE_FLAGS) .
+	$(CMAKE) --build $(CUDA_BUILD_DIR) --parallel
+
+test-cuda: build-cuda
+	$(CMAKE) -E chdir $(CUDA_BUILD_DIR) ctest --output-on-failure
 
 clean:
 	rm -rf $(BUILD_DIR)

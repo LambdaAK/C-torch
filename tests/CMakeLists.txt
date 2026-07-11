@@ -14,6 +14,7 @@ FetchContent_MakeAvailable(googletest)
 
 add_executable(ctorch_tests
     test_matrix.cpp
+    test_cuda_matrix.cpp
     test_dataaugmentor.cpp
     test_optim_programs.cpp
     test_knn.cpp

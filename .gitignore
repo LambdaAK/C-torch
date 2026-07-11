@@ -1,5 +1,6 @@
 # Build outputs
 build/
+build-cuda/
 cmake-build-*/
 out/
 *.o
