@@ -3,25 +3,47 @@
 #ifndef MATRIX_HPP
 #define MATRIX_HPP
 
-#include <vector>
-#include <iostream>
+#include <cstddef>
 #include <initializer_list>
+#include <iostream>
 #include <stdexcept>
+#include <vector>
 
 /**
  * @brief Dense matrix utility class used across models and optimizers.
  *
- * Storage is row-major in a contiguous `std::vector<double>`.
+ * Storage is one contiguous, row-major `double` buffer aligned to 64 bytes (a
+ * cache line, and wide enough for any SIMD width). The class owns its buffer
+ * with value semantics: copies are deep, and moves are O(1) pointer steals, so
+ * returning or reassigning a temporary never copies its data.
+ *
+ * Results of arithmetic are allocated without zero-filling, since every element
+ * is overwritten. Large buffers are recycled through a caching allocator, so
+ * same-shaped temporaries in a training loop do not page-fault fresh memory. Matmul uses a packed, cache-blocked, register-tiled kernel, and
+ * large ops run on a persistent thread pool (see `parallel.hpp`).
  */
 class Matrix
 {
 private:
-    size_t rows, cols;        ///< Matrix dimensions.
-    std::vector<double> data; ///< Row-major element storage.
+    size_t rows, cols;      ///< Matrix dimensions.
+    double *data_ = nullptr; ///< Row-major element storage (`rows * cols`, 64-byte aligned), or null when empty.
+
+    struct Uninitialized
+    {
+    };
+
+    /** @brief Allocates a `rows x cols` buffer without initializing it. */
+    Matrix(size_t rows, size_t cols, Uninitialized);
+
+    static double *allocate(size_t count);
+    static void deallocate(double *ptr, size_t count) noexcept;
 
 public:
+    /** @brief Memory alignment of the element buffer, in bytes. */
+    static constexpr size_t kAlignment = 64;
+
     /**
-     * @brief Constructs an empty matrix (`0 x 0`).
+     * @brief Constructs a `1 x 1` matrix holding zero.
      */
     Matrix();
 
@@ -38,18 +60,19 @@ public:
      */
     Matrix(std::initializer_list<std::initializer_list<double>> init_list);
 
-    /**
-     * @brief Copy constructor.
-     * @param other Matrix to copy.
-     */
+    /** @brief Deep copy. */
     Matrix(const Matrix &other);
 
-    /**
-     * @brief Copy assignment.
-     * @param other Matrix to copy from.
-     * @return Reference to assigned matrix.
-     */
+    /** @brief Steals `other`'s buffer; `other` is left as an empty `0 x 0` matrix. */
+    Matrix(Matrix &&other) noexcept;
+
+    /** @brief Deep copy assignment. Reuses the existing buffer when the sizes match. */
     Matrix &operator=(const Matrix &other);
+
+    /** @brief Move assignment; `other` is left as an empty `0 x 0` matrix. */
+    Matrix &operator=(Matrix &&other) noexcept;
+
+    ~Matrix();
 
     /**
      * @brief Creates an identity matrix.
@@ -61,7 +84,7 @@ public:
     /**
      * @brief Computes column-wise L2 norms.
      * @param X Input matrix.
-     * @return Row matrix containing one norm per column.
+     * @return Matrix with each column divided by its L2 norm.
      */
     static Matrix l2_norm_cols(const Matrix& X);
 
@@ -72,17 +95,20 @@ public:
      */
     static Matrix center_cols(const Matrix& X);
 
-    /**
-     * @brief Returns row count.
-     * @return Number of rows.
-     */
-    size_t numRows() const;
+    /** @brief Returns row count. */
+    size_t numRows() const noexcept { return rows; }
 
-    /**
-     * @brief Returns column count.
-     * @return Number of columns.
-     */
-    size_t numCols() const;
+    /** @brief Returns column count. */
+    size_t numCols() const noexcept { return cols; }
+
+    /** @brief Returns the number of elements (`numRows() * numCols()`). */
+    size_t size() const noexcept { return rows * cols; }
+
+    /** @brief Raw row-major element buffer (null when empty). Element `(i, j)` is `data()[i * numCols() + j]`. */
+    double *data() noexcept { return data_; }
+
+    /** @brief Raw row-major element buffer (null when empty). */
+    const double *data() const noexcept { return data_; }
 
     /**
      * @brief Bounds-checked read accessor.
@@ -90,23 +116,38 @@ public:
      * @param col Column index.
      * @return Element value at `(row, col)`.
      */
-    double at(size_t row, size_t col) const;
+    double at(size_t row, size_t col) const
+    {
+        if (row >= rows || col >= cols)
+            throw std::out_of_range("Matrix::at(): Index out of bounds");
+        return data_[row * cols + col];
+    }
 
     /**
-     * @brief Mutable element accessor.
+     * @brief Bounds-checked mutable element accessor.
      * @param row Row index.
      * @param col Column index.
      * @return Reference to element at `(row, col)`.
      */
-    double &operator()(size_t row, size_t col);
+    double &operator()(size_t row, size_t col)
+    {
+        if (row >= rows || col >= cols)
+            throw std::out_of_range("Matrix::operator(): Index out of bounds");
+        return data_[row * cols + col];
+    }
 
     /**
-     * @brief Const element accessor.
+     * @brief Bounds-checked const element accessor.
      * @param row Row index.
      * @param col Column index.
      * @return Element value at `(row, col)`.
      */
-    double operator()(size_t row, size_t col) const;
+    double operator()(size_t row, size_t col) const
+    {
+        if (row >= rows || col >= cols)
+            throw std::out_of_range("Matrix::operator() const: Index out of bounds");
+        return data_[row * cols + col];
+    }
 
     /**
      * @brief Prints matrix contents to standard output.

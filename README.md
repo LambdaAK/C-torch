@@ -75,13 +75,15 @@ make py-wheel
 ### `lib/math`
 
 - `matrix.*`
-  - Dense matrix class
-  - Element access, transpose
+  - Dense matrix class over one contiguous, 64-byte-aligned `double*` buffer (row-major, raw access via `data()`)
+  - O(1) move semantics; results are allocated uninitialized; large buffers are recycled by a caching allocator
+  - Matmul uses a packed, cache-blocked, register-tiled GEMM kernel (BLIS-style, 4x8 micro-tile)
+  - Element access, transpose (cache-tiled)
   - Arithmetic (`+`, `-`, scalar `*`, matrix `*`)
   - Vector distance and inner product
   - Activation helpers (`relu`, `sigmoid`, `tanh`) and derivatives
   - Column utilities (`l2_norm_cols`, `center_cols`)
-  - Large row-wise kernels are multi-threaded when the workload is big enough
+  - Large kernels run on a persistent thread pool (`parallel.hpp`) when the workload is big enough
 - `ast.hpp`
   - Symbolic expression tree (`Num`, `Var`, arithmetic ops, `exp`, `log`, `sqrt`, `abs`, `max`, `min`, `sigmoid` helper)
   - Simplification and substitution
